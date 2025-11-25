@@ -6,7 +6,7 @@ Given a single-cell lineage tree, fit gene expression to evolutionary models to 
 #### Quick Start
 ##### Installation
 ```
-devtools::install('https://github.com/hrstuart/SCOUT/')
+devtools::install_github('https://github.com/hrstuart/SCOUT/')
 ```
 #### Run SCOUT
 ```
