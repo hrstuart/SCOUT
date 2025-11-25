@@ -17,7 +17,18 @@ inputs <- prepare_data(tree_path = tree, # path to newick file
                        regimes = c("BM1", "OU1", "OUM"), # substitute OUM for column names in metadata with regime annotation
                        normalize = TRUE, # if using counts
                        smoothing = 10) # smoothing param.
+```
+Example metadata: 
+| cellBC             | OU4 | HES4      | ISG15     | AGRN      | SDF4      |
+|--------------------|-----|-----------|-----------|-----------|-----------|
+| ACGGAGAGTAAGCACG-1 | LL  | 0         | 0         | 0         | 0.577392  |
+| ACTTACTAGGAATGGA-1 | LL  | 0.7890783 | 0.1583906 | 0.5226525 | 0.1583906 |
+| AGCGGTCCAACACGCC-1 | RL  | 0.197258  | 0.3619425 | 0         | 0.6271318 |
+| AGTGTCATCGGAGCAA-1 | M   | 0.3356066 | 0.3356066 | 0.5864398 | 0.3356066 |
+| ATAGACCCAGCCAGAA-1 | LL  | 0         | 0.7329661 | 0.3077897 | 0         |
+| CATCGGGCATGACATC-1 | Liv | 0.3847468 | 0.3847468 | 0         | 0.6619065 |
 
+```
 # Step 2: Fit models in parallel on prepared data
 results <- fitModel(inputs,
                   cores = 4,
