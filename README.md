@@ -1,5 +1,6 @@
-# devtools <a href="https://github.com/hrstuart/SCOUT"><img src="images/icon_2025.11.22.689941v1.full.png" align="right" height="138" alt=""/></a>
-
+# devtools <a href="https://github.com/hrstuart/SCOUT">
+  <img src="images/icon_2025.11.22.689941v1.full.png" style="float: right;" height="138" alt="SCOUT logo">
+</a>
 
 ## SCOUT: Ornstein–Uhlenbeck modelling of gene expression evolution on single-cell lineage trees
 
