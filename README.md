@@ -21,19 +21,11 @@ SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze g
 - **Comprehensive model selection**: Automated calculation of AICc weights, delta AICc, and other fit metrics
 - **Regime annotation**: Support for custom regime classifications across the lineage tree
 
-### Installation
 
-```r
-# Install dependencies
-devtools::install_github("Galaxeee/TedSim")
-
-# Install SCOUT from GitHub
-devtools::install_github('https://github.com/hrstuart/SCOUT/')
-```
 
 ### Dependencies
 
-SCOUT requires the following R packages:
+SCOUT relies on the following R packages:
 - `dplyr` - Data manipulation
 - `ape` - Phylogenetic analyses
 - `OUwie` - OU model fitting
@@ -43,6 +35,35 @@ SCOUT requires the following R packages:
 - `caret` - Model evaluation
 - `TedSim` - Simulation framework (install from GitHub: `Galaxeee/TedSim`)
 
+Most should be installed 
+
+### Installation
+
+First install TedSim and it's dependencies; there may be some additional TedSim dependencies to track down depending on your system setup:
+```r
+
+install.packages("remotes")
+
+remotes::install_github("dynverse/dyno")
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+	
+BiocManager::install("SummarizedExperiment")
+
+
+BiocManager::install("Rtsne")
+
+# Install dependencies
+devtools::install_github("Galaxeee/TedSim")
+```
+
+Once TedSim is installed you can install Scout:
+
+```r
+# Install SCOUT from GitHub
+devtools::install_github('https://github.com/hrstuart/SCOUT/')
+```
 ### Quick Start
 
 #### Step 1: Prepare your data
