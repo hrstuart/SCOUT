@@ -8,6 +8,7 @@ Given a single-cell lineage tree, fit gene expression to evolutionary models to 
 
 <img src="https://github.com/hrstuart/SCOUT/blob/main/data/F1_GraphicalAbstract.svg" alt="Graphical abstract of SCOUT" width="450" />
 
+Check out our pre-print [here](https://www.biorxiv.org/content/10.1101/2025.11.12.688020v1)! 
 ### Overview
 
 SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze gene expression evolution along single-cell lineage trees. The package enables researchers to:
@@ -169,7 +170,7 @@ SCOUT produces several outputs:
 
 If you use SCOUT in your research, please cite:
 
-[Citation information to be added]
+Stuart, H., & McKenna, A. (2025). SCOUT: Ornstein–Uhlenbeck modelling of gene expression evolution on single-cell lineage trees. bioRxiv, 2025.11.12.688020. https://doi.org/10.1101/2025.11.12.688020
 
 ### License
 
