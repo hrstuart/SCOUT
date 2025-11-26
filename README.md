@@ -24,7 +24,10 @@ SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze g
 ### Installation
 
 ```r
-# Install from GitHub
+# Install dependencies
+devtools::install_github("Galaxeee/TedSim")
+
+# Install SCOUT from GitHub
 devtools::install_github('https://github.com/hrstuart/SCOUT/')
 ```
 
@@ -38,6 +41,7 @@ SCOUT requires the following R packages:
 - `castor` - Tree manipulation and ancestral state reconstruction
 - `reshape2` - Data reshaping
 - `caret` - Model evaluation
+- `TedSim` - Simulation framework (install from GitHub: `Galaxeee/TedSim`)
 
 ### Quick Start
 
