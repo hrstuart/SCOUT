@@ -26,6 +26,7 @@ SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze g
 ### Dependencies
 
 SCOUT relies on the following R packages:
+- `future` - running parallel jobs
 - `dplyr` - Data manipulation
 - `ape` - Phylogenetic analyses
 - `OUwie` - OU model fitting
