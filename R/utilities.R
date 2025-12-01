@@ -17,7 +17,8 @@ log_message <- function(message, log_file = NULL, verbose = FALSE) {
 
 #' Run OUwie model on a single gene and regime
 #' @export
-run_one_ouwies_one_gene <- function(phy, meta, regime, gene, model, algorithm, mode, mserr) {
+run_one_ouwies_one_gene <- function(phy, meta, regime, gene, model, algorithm, mode, sh) {
+    log_message(sprintf('Running... %s ~ %s, Scale? %s', model, gene, sh), verbose=FALSE)
     if (mode != 'dichotomous') {
         if (model == 'BM1' ){
             starting_vals = c(0.1)
@@ -35,11 +36,13 @@ run_one_ouwies_one_gene <- function(phy, meta, regime, gene, model, algorithm, m
                  model = model, 
                  algorithm=algorithm,
                  starting.vals = starting_vals,
+                 scaleHeight = sh, 
+                 ub = c(1e6, 1e6, 1e6), # hard coded, not sure if I want to leave it like that but okay for now. 
                  quiet=TRUE,
                  warn=FALSE)
           }, 
           error = function(e){
-            log_message(paste('ERROR - ', regime, 'failed for', gene, ' with error: ', e$message), verbose=TRUE)
+            log_message(paste('ERROR - ', model, 'failed for', gene, ' with error: ', e$message), verbose=TRUE)
             return(NULL)
           } ) 
 
@@ -166,8 +169,7 @@ add_new_column <- function(df, col1_name, col2_name, new_col_name, other_list) {
 #' Wrapper function to return the model results
 #' @export
 return_model <- function(model_input, meta, regime, candidate, options) {
-  log_message(sprintf('Running... %s ~ %s', regime, candidate), verbose=FALSE)
-  res_model <- run_one_ouwies_one_gene(model_input[[regime]]$tree, meta, model_input[[regime]]$rcol, candidate, model_input[[regime]]$model, 'three.point', options$resolve)
+  res_model <- run_one_ouwies_one_gene(model_input[[regime]]$tree, meta, model_input[[regime]]$rcol, candidate, model_input[[regime]]$model, 'three.point', options$resolve, options$scale)
     if (!is.null(res_model)) {
       res <- process_ouwie_single(res_model, candidate, regime)
     } else {

@@ -12,6 +12,7 @@
 #' @param normalize Logical, whether to log-normalize data
 #' @param smoothing Optional integer smoothing parameter
 #' @param floor Numeric floor for zero counts
+#' @param scale T/F whether to scale tree height to 1. 
 #' @param blacklist Vector of column names to exclude when inferring quantitative traits
 #' @param troubleshoot Logical, whether to limit genes for troubleshooting
 #' @param write_smooth Logical, whether to save smoothed counts intermediate file
@@ -19,7 +20,7 @@
 #' @export
 prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, quant_traits = NULL,
                         name = NULL, regimes = "BM1", algorithm = "three.point", anc_infer = "ape",
-                        resolve = "dichotomous", normalize = FALSE, smoothing = NULL, floor = 0,
+                        resolve = "dichotomous", normalize = FALSE, smoothing = NULL, floor = 0, scale = FALSE,
                         blacklist = NULL, troubleshoot = FALSE, write_smooth = FALSE, logfile=NULL) {
 
     create_directory_if_not_exists(outpath)
@@ -121,8 +122,8 @@ prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, 
         phy$edge.length <- rep(1, Nedge(phy))
         log_message('No edge lengths, replacing with 1s.', verbose=TRUE)
     } else if (sum(phy$edge.length == 0) > 0){
-        log_message('Found 0 length edges. Replacing with 1s.', verbose=TRUE)
-        phy$edge.length[phy$edge.length == 0] <- 1
+        log_message('Found 0 length edges. Replacing 0 edge lengths with with 1e-7.', verbose=TRUE)
+        phy$edge.length[phy$edge.length == 0] <- 1e-7
     } else {
         log_message('Found edge lengths.', verbose=TRUE)
         #print(fivenum(phy$edge.length))
@@ -154,7 +155,7 @@ prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, 
     }
 
     if (floor > 0){
-        g_meta[g_meta == 0] <- options$floor
+        g_meta[g_meta == 0] <- floor
     }
 
     cln_meta <- meta[phy$tip.label, ]
@@ -202,7 +203,7 @@ prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, 
 
     rownames(cln_meta) <- NULL
 
-    return(list('inputs'=model_input, 'meta_data' = cln_meta, 'gene_cols' = gene_cols, 'regimes' = regimes, 'attributes' = list('anc_infer' = anc_infer, 'resolve' = resolve)))
+    return(list('inputs'=model_input, 'meta_data' = cln_meta, 'gene_cols' = gene_cols, 'regimes' = regimes, 'attributes' = list('anc_infer' = anc_infer, 'resolve' = resolve, 'scale'=scale)))
 }
 
 #' Fit OUwie models in parallel
@@ -244,29 +245,24 @@ fitModel <- function(inputs, cores = 1, write = TRUE, outpath = NULL, prefix = "
     log_message(sprintf('Fitting %d model-gene combinations using %d cores.', nrow(combo_df), cores), verbose=TRUE)
     
     plan(multisession, workers = cores)
-    handlers("progress")
 
-    with_progress({
-        p <- progressor(along = 1:nrow(combo_df))
-        result_list <- future_lapply(seq_len(nrow(combo_df)), function(idx){
-          p(sprintf("x=%g", idx))
+    result_list <- future_lapply(seq_len(nrow(combo_df)), function(idx){
 
-          i <- combo_df$i[idx]
-          j <- combo_df$j[idx]
-          r <- regimes[i]
-          g <- genes[j]
+        i <- combo_df$i[idx]
+        j <- combo_df$j[idx]
+        r <- regimes[i]
+        g <- genes[j]
 
-          res <- tryCatch({
+        res <- tryCatch({
             return_model(inputs[['inputs']], inputs[['meta_data']], r, g, inputs[['attributes']])
-          }, error = function(e){
+        }, error = function(e){
             log_message(paste0('Error in task regime:', r, ' gene:', g, ' - ', conditionMessage(e), '\n'), log_file=logfile, verbose=TRUE)
             return(NULL)
-          })
+        })
 
-          return(res)
-        }, future.seed = TRUE)
-    })
-
+        return(res)
+    }, future.seed = TRUE)
+    
     log_message('Done with model fitting.', verbose=TRUE)
 
     # Gather result 

@@ -18,6 +18,7 @@ prepare_data(
   normalize = FALSE,
   smoothing = NULL,
   floor = 0,
+  scale = FALSE,
   blacklist = NULL,
   troubleshoot = FALSE,
   write_smooth = FALSE,
@@ -50,6 +51,8 @@ prepare_data(
 \item{smoothing}{Optional integer smoothing parameter}
 
 \item{floor}{Numeric floor for zero counts}
+
+\item{scale}{T/F whether to scale tree height to 1.}
 
 \item{blacklist}{Vector of column names to exclude when inferring quantitative traits}
 

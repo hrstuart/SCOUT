@@ -4,7 +4,7 @@
 \alias{run_one_ouwies_one_gene}
 \title{Run OUwie model on a single gene and regime}
 \usage{
-run_one_ouwies_one_gene(phy, meta, regime, gene, model, algorithm, mode, mserr)
+run_one_ouwies_one_gene(phy, meta, regime, gene, model, algorithm, mode, sh)
 }
 \description{
 Run OUwie model on a single gene and regime
