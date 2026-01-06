@@ -7,7 +7,7 @@
 #' @export
 get_fit_metrics <- function(results, outpath = NULL, prefix = "OUWIE", write = FALSE) {
     
-    if (is.list(results)) {
+    if (class(results) == 'list') {
         rdf <- results[['results']]
     } else {
         rdf <- results
@@ -40,7 +40,8 @@ processes_results <- function(i, d=2, ac=0.1) {
         if (file.exists(i)){
             res_x <- read.csv(i, row.names = 1) %>% distinct()
         }
-    } else if (is.list(i)){
+    print(class(i))
+    } else if (class(i) == 'list'){
         res_x <- i[['results']]
     } else if (class(i) == "data.frame"){
         res_x <- i
@@ -73,7 +74,7 @@ processes_results <- function(i, d=2, ac=0.1) {
         stop('Error in post-processing. Models not selected correctly. Aborting.')
     }
 
-    if (is.list(i)){
+    if (class(i) == 'list'){
         i[['model_selection']] <- res_i 
         i[['deltaAIC']] <- d 
         i[['alpha_cutoff']] <- ac
