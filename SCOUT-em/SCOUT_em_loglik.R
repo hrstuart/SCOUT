@@ -39,18 +39,23 @@ invert_LL <- function(phy, edges, Rate.mat, root.state, y, W) {
 }
 
 # NEED TO DOUBLE CHECK 1. get.root.theta as an option and 2. whether tip.fog gets set at some point. 
-tp_LL <- function(phy, edges, Rate.mat, y, W){
+tp_LL <- function(phy, edges, Rate.mat, y, W, get.root.theta, options, t0=NULL){
+    # UNPACK OPTIONS
+    tot.states <- options[[1]]
+    map <- options[[2]]
+    tip.paths <- options[[3]]
+
 	pars <- matrix(c(Rate.mat[3,], Rate.mat[2,], Rate.mat[1,]), dim(Rate.mat)[2], 3, 
                 dimnames = list(levels(factor((tot.states))), c("opt", "sig", "alp")))
-    if(get.root.theta == TRUE){
-        root.par.index <- length(p)
-        theta0 <- p[root.par.index]
-        expected.vals <- colSums(t(W) * c(theta0, pars[,1]))
+    if(!is.null(t0)){
+        expected.vals <- colSums(t(W) * c(t0, pars[,1]))
         names(expected.vals) <- phy$tip.label
     }else{
         expected.vals <- colSums(t(W) * pars[,1])
         names(expected.vals) <- phy$tip.label
     }
+
+    transformed.tree <- transformPhy(phy, map, pars, tip.paths)
               
     comp <- NA
     try(comp <- phylolm::three.point.compute(transformed.tree$tree, y, expected.vals, transformed.tree$diag), silent=TRUE)
@@ -125,7 +130,7 @@ gaus <- function(y, mu, sd){
     return(-ll)
 }
 
-optim_joint <- function(p, obs, tree, edges, index.mat, Rate.mat, root.age, root.state, get.root.theta, version = NULL, mode = 'ignore') {
+optim_joint <- function(p, obs, tree, edges, index.mat, Rate.mat, root.age, root.state, get.root.theta, algorithm, options, version = NULL, mode = 'ignore') {
     p <- exp(p)
     np <- length(p)
 
@@ -134,9 +139,10 @@ optim_joint <- function(p, obs, tree, edges, index.mat, Rate.mat, root.age, root
     if (any(is.na(index.mat))){
         index.mat[is.na(index.mat)] <- np + 1  # fill NA with 1e-10, fills in below. 
     }
+    ##print(p)
+    #print(index.mat)
 
     Rate.mat[] <- c(p, 1e-10)[index.mat]
-    #print(Rate.mat)
     if(get.root.theta == TRUE){
         W <- weight.mat(tree, edges, Rate.mat, root.state=root.state, simmap.tree=FALSE, root.age=root.age, scaleHeight=FALSE, assume.station=FALSE, shift.point=0.5)
     }else{
@@ -209,20 +215,30 @@ optim_joint <- function(p, obs, tree, edges, index.mat, Rate.mat, root.age, root
         ll2 <- pois2(obs, lambda = lambda)
         
     }
-
     # establish obs norm across the board. 
     # Calculate OU-likelihood
-    ll1 <- invert_LL(tree, edges, Rate.mat, root.state, obs_norm, W)
-  
-   # cat('\nOU-likelihood:\n')
-   # print(ll1)
+    if (algorithm == 'three.point'){
+        if(get.root.theta == TRUE){
+            root.par.index <- length(p)
+            theta0 <- p[root.par.index]
+        } else {
+            theta0 <- NULL
+        }
+        ll1 <- tp_LL(tree, edges, Rate.mat, obs_norm, W, get.root.theta, options, theta0)
+
+    } else if (algorithm == 'invert'){
+        ll1 <- invert_LL(tree, edges, Rate.mat, root.state, obs_norm, W)
+    }
+    
+    #cat('\nOU-likelihood:\n')
+    #print(ll1)
 
     #cat('\nNoise likelihood:\n')
     #print(ll2)
     # if nothing special then ll2 should = 0. 
+
     if (any(is.na(c(ll1, ll2)))){return(10000000)}
     totll <- ll1 + ll2
 
     return(totll)
 }
-
