@@ -241,7 +241,7 @@ initialize_starting <- function(phy, model, x, index.mat, k, bounds, Tmax_init, 
 emitBounds <- function(em, bounds, x){
     lb <- bounds$lb; ub <- bounds$ub
 
-     # Not sure how to handle this in an OUM situation... I wonder if we keep it this way without multiple parameters for multiple thetas? That is what chat gpt said... 
+     # Not sure how to handle this in an OUM situation... I wonder if we keep it this way without multiple parameters for multiple thetas? 
     # The starting values for OU need to be in the log-space but if using the NB or POIS model, 
     # the starting values need to be in the counts space...  and the counts need to be passed to the nloptr function. 
     if (em == 'NORM'){
