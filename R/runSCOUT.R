@@ -50,8 +50,8 @@ prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, 
     }
 
     reg_oums <- regimes[! regimes %in% c('BM1', 'OU1')]
-    if (length(intersect(regimes, colnames(meta))) != length(reg_oums)){
-        stop('Specified regimes not found in metadata columns: %s. Please correct. Exiting...', paste(reg_oums, collapse=', '))
+    if (length(intersect(reg_oums, colnames(meta))) != length(reg_oums)){
+        stop(sprintf('Specified regimes not found in metadata columns: %s. Please correct. Exiting...', paste(reg_oums, collapse=', ')))
     }
 
     if (is.list(quant_traits) || is.vector(quant_traits)){
@@ -216,7 +216,7 @@ prepare_data <- function(tree_path, metadata_path, outpath, species_key = NULL, 
 #' @param testregimes If regimes of interest is a subset of the full regime list, provide a list of regimes to test. 
 #' @return Data frame of combined model summaries
 #' @export
-fitModel <- function(inputs, cores = 1, write = TRUE, outpath = NULL, prefix = "OUWIE", logfile=NULL,
+fitModel.corr <- function(inputs, cores = 1, write = TRUE, outpath = NULL, prefix = "OUWIE", logfile=NULL,
     testgenes = NULL, testregimes = NULL) {
 
     totalCores = parallel::detectCores(logical = FALSE)
@@ -266,7 +266,15 @@ fitModel <- function(inputs, cores = 1, write = TRUE, outpath = NULL, prefix = "
     log_message('Done with model fitting.', verbose=TRUE)
 
     # Gather result 
-    models_summary <- do.call(rbind, lapply(result_list, function(x) {x[, c('quant_trait', 'loglik', 'AIC', 'AICc', 'BIC', 'model', 'regime', 'param.count', 'alpha', 'sigma.sq')]}))
+    models_summary <- do.call(rbind, lapply(result_list, function(x) {
+        if (is.null(x) | length(x) == 2) { # if = 2 then only gene name and regime made it. 
+            return(NULL)
+        } else{
+            ret <- x[, c('quant_trait', 'loglik', 'AIC', 'AICc', 'BIC', 'model', 'regime', 'param.count', 'alpha', 'sigma.sq')]
+            return(ret)
+        }
+    }
+    ))
 
     regime_specific_res = list()
 
@@ -285,8 +293,8 @@ fitModel <- function(inputs, cores = 1, write = TRUE, outpath = NULL, prefix = "
     write.csv(models_summary, paste0(outpath, '/', prefix, '_model_results.csv'))
     }
 
-
-    return((list('results' = models_summary, 'per_model' = regime_specific_res)))
+    saveRDS(result_list, file = paste0(outpath, '/', prefix, '_full_model_results.rds'))
+    return((list('results' = is.null, 'per_model' = regime_specific_res)))
 }
 
 
