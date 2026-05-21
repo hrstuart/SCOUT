@@ -81,11 +81,11 @@ generate_thetas <- function(x, nstats, step) {
 
 #'@import OUwie
 generate_EvoEVFs <- function(real_tree, metadata, nevfs, a, s, t0, theta_step, n_states){
-	oum_thetas <- generate_thetas(t0, n_states, theta_step)
+	#oum_thetas <- generate_thetas(t0, n_states, theta_step)
 
     bm_evf <- lapply(1:3, function(iparam){
         evfs <- sapply(1:nevfs, function(i){
-            d <- OUwie.sim(real_tree, metadata,  alpha=rep(1e-10, n_states), sigma.sq=rep(s, n_states), theta0=t0, theta=rep(t0, n_states), simmap.tree = FALSE)
+            d <- OUwie.sim.edited(real_tree, metadata,  alpha=rep(1e-10, n_states), sigma.sq=rep(s, n_states), theta0=t0, theta=rep(t0, n_states), simmap.tree = FALSE)
             return(d$X)
         })
     return(evfs)
@@ -93,15 +93,17 @@ generate_EvoEVFs <- function(real_tree, metadata, nevfs, a, s, t0, theta_step, n
 
     ou1_evf <- lapply(1:3, function(iparam){
         evfs <- sapply(1:nevfs, function(i){
-            d <- OUwie.sim(real_tree, metadata, alpha=rep(a, n_states), sigma.sq=rep(s, n_states), theta0=4, theta=rep(t0+theta_step, n_states), simmap.tree = FALSE)
+            d <- OUwie.sim.edited(real_tree, metadata, alpha=rep(a, n_states), sigma.sq=rep(s, n_states), theta0=t0, theta=rep(t0+theta_step, n_states), simmap.tree = FALSE)
             return(d$X)
         })
         return(evfs)
     })
 
+    #thetas <- generate_thetas(t0, n_states, theta_step)
+    thetas <- seq(from = t0, by=theta_step, length.out = n_states)
     oum_evf <- lapply(1:3, function(iparam){
         evfs <- sapply(1:nevfs, function(i){
-            d <- OUwie.sim(real_tree, metadata,  alpha=rep(a, n_states), sigma.sq=rep(s, n_states), theta0=4, theta=c(2, 4, 6, 8, 10), simmap.tree = FALSE)
+            d <- OUwie.sim.edited(real_tree, metadata,  alpha=rep(a, n_states), sigma.sq=rep(s, n_states), theta0=t0, theta=thetas, simmap.tree = FALSE)
             return(d$X)
         })
         return(evfs)
@@ -234,3 +236,215 @@ simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t
 }
 
 
+
+
+##OUwie Simulator##
+
+#written by Jeremy M. Beaulieu
+
+#Simulates the Hansen model of continuous characters evolving under discrete selective
+#regimes. The input is a tree of class "phylo" that has the regimes as internal node labels
+#and a data file the contains the regime states for each species. The trait file must be in
+#the following order: Species names then Regime. The user must specify the parameters values
+#for each simulation (i.e. alpha, sigma.sq, theta0, theta).
+
+##The following examples assume 2 selective regimes and different models can be specified:
+#single rate Brownian motion BM1: alpha=c(0,0); sigma.sq=c(0.9); theta0=0; theta=c(0,0)
+#two rate Brownian motion BMS: alpha=c(0,0); sigma.sq=c(0.45,.9); theta0=0; theta=c(0,0)
+#global OU (OU1): alpha=c(0.1,0.1); sigma.sq=c(0.9,0.9); theta0=1; theta=c(1,1)
+#normal OU (OUSM): alpha=c(0.1,0.1); sigma.sq=c(0.9,0.9); theta0=0; theta=c(1,2)
+#multiple sigmas (OUSMV): alpha=c(0.1,0.1); sigma.sq=c(0.45,0.9);
+#multiple alphas (OUSMA): alpha=c(0.5,0.1); sigma.sq=c(0.9,0.9); theta0=0; theta=c(1,2)
+#multiple alphas and sigmas (OUSMVA): alpha=c(0.5,0.1); sigma.sq=c(0.45,0.9); theta0=0; theta=c(1,2)
+
+OUwie.sim.edited <- function(phy=NULL, data=NULL, simmap.tree=FALSE, root.age=NULL, scaleHeight=FALSE, 
+    alpha=NULL, sigma.sq=NULL, theta0=NULL, theta=NULL, mserr="none", shift.point=0.5, fitted.object=NULL, get.all=FALSE){
+    mserr_vector <- NA
+    if(!is.null(fitted.object)) {
+        if(grepl("BM", fitted.object$model) | grepl("OU1", fitted.object$model)) {
+            stop(paste("not implemented yet for ", fitted.object$model))
+        }
+        if(!is.null(alpha) | !is.null(theta0) | !is.null(theta)) {
+            stop("You're passing in parameters to simulate from AND a fitted object to simulate under. You can do one or the other")
+        }
+        phy <- fitted.object$phy
+        data <- cbind(phy$tip.label, fitted.object$data)
+        alpha <- fitted.object$solution['alpha',]
+        alpha[which(is.na(alpha))] <- 0
+        sigma.sq <- fitted.object$solution['sigma.sq',]
+        
+        if(mserr != "none"){
+            warning("measurement error is not yet handled for simulations from fitted.object")
+        }
+        
+        if (fitted.object$root.station == TRUE | fitted.object$root.station==FALSE){
+            if (fitted.object$model == "OU1"){
+                theta <- matrix(t(fitted.object$theta[1,]), 2, length(levels(fitted.object$tot.states)))[1,]
+                theta0 <- theta[phy$node.label[1]]
+            }
+        }
+        if (fitted.object$root.station == TRUE | !grepl("OU", fitted.object$model)){ # BM1 or BMS as well
+            if (fitted.object$model != "OU1"){
+                theta <- matrix(t(fitted.object$theta), 2, length(levels(fitted.object$tot.states)))[1,]
+                theta0 <- theta[phy$node.label[1]]
+            }
+        }
+        if (fitted.object$root.station == FALSE & grepl("OU", fitted.object$model)){
+            if (fitted.object$model != "OU1"){
+                if(fitted.object$get.root.theta == TRUE){
+                    theta.all <- matrix(t(fitted.object$theta), 2, 1:length(levels(fitted.object$tot.states))+1)[1,]
+                    theta <- theta.all[2:length(theta.all)]
+                    theta0 <- theta.all[1]
+                }else{
+                    int.states <- factor(phy$node.label)
+                    phy.tmp <- phy
+                    phy.tmp$node.label <- as.numeric(int.states)
+                    theta <- matrix(t(fitted.object$theta), 2, length(levels(fitted.object$tot.states)))[1,]
+                    theta0 <- theta[phy.tmp$node.label[1]]
+                }
+            }
+        }
+    }
+
+    bt <- branching.times(phy)
+    if(is.null(root.age)){
+        if(any(bt<0)){
+            cat("Warning: Looks like your tree is producing negative branching times. Adjusting to make branches positive." )
+            bt <- bt - min(bt)
+        }
+    }
+
+    #Makes sure the data is in the same order as the tip labels
+    if(simmap.tree == FALSE){
+        #This is annoying, but the second column has to be in there twice otherwise, error.
+        if(mserr == "none"){
+            data <- data.frame(data[,2], data[,2], row.names=data[,1])
+        }
+        if(mserr == "known"){
+            data <- data.frame(data[,2], data[,3], row.names=data[,1])
+            mserr_vector <- data[,2] #because we've shifted things over
+        }
+        if(is.numeric(mserr)){
+            if(length(mserr) == length(phy$tip.label)){
+                data <- data.frame(data[,2], mserr, row.names=data[,1])
+                mserr_vector <- mserr
+            }   
+            if(length(mserr)==1){
+                data <- data.frame(data[,2], rep(mserr, length(phy$tip.label)), row.names=data[,1])
+                mserr_vector <- rep(mserr, length(phy$tip.label))
+            }
+            mserr <- "known"
+        }
+
+        data <- data[phy$tip.label,]
+
+        n <- max(phy$edge[,1])
+        ntips <- length(phy$tip.label)
+
+        int.states <- factor(phy$node.label)
+        phy$node.label <- as.numeric(int.states)
+        tip.states <- factor(data[,1])
+        data[,1] <- as.numeric(tip.states)
+        tot.states <- factor(c(phy$node.label,as.character(data[,1])))
+        k <- length(levels(tot.states))
+
+        regime <- matrix(rep(0,(n-1)*k), n-1, k)
+
+        #Obtain root state and internal node labels
+        root.state <- phy$node.label[1]
+        int.state <- phy$node.label[-1]
+
+        #New tree matrix to be used for subsetting regimes
+        edges <- cbind(c(1:(n-1)),phy$edge,MakeAgeTable(phy, root.age=root.age))
+        if(scaleHeight == TRUE){
+            edges[,4:5] <- edges[,4:5]/max(MakeAgeTable(phy, root.age=root.age))
+            root.age <- 1
+        }
+        
+        edges <- edges[sort.list(edges[,3]),]
+        mm <- c(data[,1],int.state)
+
+        regime <- matrix(0,nrow=length(mm),ncol=length(unique(mm)))
+        #Generates an indicator matrix from the regime vector
+        for (i in 1:length(mm)) {
+            regime[i,mm[i]] <- 1
+        }
+        #Finishes the edges matrix
+        edges <- cbind(edges,regime)
+
+        #Resort the edge matrix so that it looks like the original matrix order
+        edges <- edges[sort.list(edges[,1]),]
+
+        oldregime <- root.state
+
+        alpha <- alpha
+        alpha[alpha==0] <- 1e-10
+        sigma <- sqrt(sigma.sq)
+        theta  <- theta
+
+        x <- matrix(0, n, 1)
+        TIPS <- 1:ntips
+        ROOT <- ntips + 1L
+        x[ROOT,] <- theta0
+
+        for(i in 1:length(edges[,1])){
+            anc <- edges[i,2]
+            desc <- edges[i,3]
+            oldtime <- edges[i,4]
+            newtime <- edges[i,5]
+            if(anc%in%edges[,3]){
+                start <- which(edges[,3]==anc)
+                oldregime <- which(edges[start,6:(k+5)]==1)
+            }else{
+                #For the root:
+                oldregime <- root.state
+            }
+            newregime=which(edges[i,6:(k+5)]==1)
+
+            if(oldregime==newregime){
+                x[edges[i,3],] <- (x[edges[i,2],]*exp(-alpha[oldregime]*(newtime-oldtime))) + (theta[oldregime]*(1-exp(-alpha[oldregime]*(newtime-oldtime)))) + (sigma[oldregime]*rnorm(1,0,1)*sqrt((1-exp(-2*alpha[oldregime]*(newtime-oldtime)))/(2*alpha[oldregime])))
+            }else{
+                shifttime <- newtime-((newtime-oldtime) * shift.point)
+                epoch1 <- (x[edges[i,2],]*exp(-alpha[oldregime]*(shifttime-oldtime))) + (theta[oldregime]*(1-exp(-alpha[oldregime]*(shifttime-oldtime)))) + (sigma[oldregime]*rnorm(1,0,1)*sqrt((1-exp(-2*alpha[oldregime]*(shifttime-oldtime)))/(2*alpha[oldregime])))
+                oldtime <- shifttime
+                newtime <- newtime
+                x[edges[i,3],] <- (epoch1*exp(-alpha[newregime]*(newtime-oldtime))) + (theta[newregime]*(1-exp(-alpha[newregime]*(newtime-oldtime)))) + (sigma[newregime]*rnorm(1,0,1)*sqrt((1-exp(-2*alpha[newregime]*(newtime-oldtime)))/(2*alpha[newregime])))
+            }
+        }
+
+        if(get.all == TRUE){
+            sim.dat <- matrix(,length(x),3)
+            sim.dat <- data.frame(sim.dat)
+
+            sim.dat[,1] <- NA
+            sim.dat[TIPS,1] <- phy$tip.label
+            sim.dat[,2] <- c(data[,1], phy$node.label)
+            sim.dat[,3] <- x
+            
+            if(mserr == "known"){
+                for(i in TIPS){
+                    sim.dat[i,3] <- rnorm(1,sim.dat[i,3],data[i,2])
+                }
+            }
+        }else{
+            sim.dat <- matrix(,ntips,3)
+            sim.dat <- data.frame(sim.dat)
+
+            sim.dat[,1] <- phy$tip.label
+            sim.dat[,2] <- data[,1]
+            sim.dat[,3] <- x[TIPS]
+            
+            if(mserr == "known"){
+                for(i in TIPS){
+                    sim.dat[i,3] <- rnorm(1,sim.dat[i,3],data[i,2])
+                }
+            }
+        }
+
+        colnames(sim.dat)<-c("Genus_species","Reg","X")
+        if(mserr=="known"){
+            sim.dat$mserr <- mserr_vector   
+        }
+    }
+    sim.dat
+}
