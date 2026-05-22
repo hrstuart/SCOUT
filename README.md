@@ -17,8 +17,6 @@ SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze g
 - Analyze regime-specific evolutionary dynamics across lineage trajectories
 - Perform model selection using information criteria (AIC)
 
-SCOUT has three available versions. SCOUT-EM is an expectation-maximization approach which assumes an unobserved latent expression state governed by the evolutionary dyanmics of the OU-model. Thus, expression is estimated in its latent state in the E-step of the model. OU-parameters are estimated in the M-step. SCOUT, or SCOUT-SM is a baseline framework which uses a lineage smoothing preprocessed step to handle transcriptional noise. The OU-parameters are optimized akin to just the M-step with no additional noise modeling. Finally, we also include the option to run the model a concept called 'tip-fog' which models measurement error from the assumed evolutionary model. For for information on tip-fog, check out: [Beaulieu and O'Meara 2025](https://academic.oup.com/evolut/article/79/7/1131/8104471).
-
 ### Dependencies
 
 SCOUT relies on the following R packages:
@@ -27,7 +25,7 @@ SCOUT relies on the following R packages:
 - `TedSim` - Simulation framework (install from GitHub: `Galaxeee/TedSim`)
 - `corpcor` - Matrix operations
 - `nloptr` - Optimization
-- 
+  
 Most should be installed 
 
 ### Installation
@@ -83,6 +81,8 @@ SCOUT requires two main inputs:
 ### Running SCOUT
 #### Workflow 
 First, `formatSCOUT` prepares the data for analysis with the core function in the model `runSCOUT`. This produces an rds file with annotations and further post-processing is needed to extract gene names and annotations. The wrapper function `SCOUT` runs all steps and returns a table with genes and annotations, as well as $\alpha$ and $\sigma^2$ parameter estimates. Since, $\theta$ estimates differ by model, those are returned separately. 
+
+SCOUT has three available versions. SCOUT-EM is an expectation-maximization approach which assumes an unobserved latent expression state governed by the evolutionary dyanmics of the OU-model. Thus, expression is estimated in its latent state in the E-step of the model. OU-parameters are estimated in the M-step. SCOUT, or SCOUT-SM is a baseline framework which uses a lineage smoothing preprocessed step to handle transcriptional noise. The OU-parameters are optimized akin to just the M-step with no additional noise modeling. Finally, we also include the option to run the model a concept called 'tip-fog' which models measurement error from the assumed evolutionary model. For for information on tip-fog, check out: [Beaulieu and O'Meara 2025](https://academic.oup.com/evolut/article/79/7/1131/8104471).
 
 **Key parameters**: 
 * *counts.file* | Path to counts file with OUx annotations for any non-BM/OU1 hypotheses. Key columns: 'species' (or specify the column name with the tip-labels with the argument 'species_key'), OUx, genes. 
