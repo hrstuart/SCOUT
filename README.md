@@ -55,10 +55,7 @@ Once TedSim is installed you can install SCOUT:
 # Install SCOUT from GitHub
 devtools::install_github('https://github.com/hrstuart/SCOUT/')
 ```
-### Quick Start
-
-#### Step 1: Prepare your data
-
+### Getting Started
 SCOUT requires two main inputs:
 
 1. **Phylogenetic tree**: A Newick format file containing the single-cell lineage tree
