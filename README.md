@@ -6,41 +6,28 @@
 
 Given a single-cell lineage tree, fit gene expression to evolutionary models to profile selection and drift.
 
-<img src="https://github.com/hrstuart/SCOUT/blob/main/data/F1_GraphicalAbstract.svg" alt="Graphical abstract of SCOUT" width="450" />
+<img src="https://github.com/hrstuart/SCOUT/blob/main/images/SCOUT_workflow.png" alt="Graphical abstract of SCOUT" width="450" />
 
 Check out our pre-print [here](https://www.biorxiv.org/content/10.1101/2025.11.12.688020v1)! 
 ### Overview
 
 SCOUT is an R package that applies Ornstein-Uhlenbeck (OU) modeling to analyze gene expression evolution along single-cell lineage trees. The package enables researchers to:
-
 - Fit multiple evolutionary models (Brownian Motion, Ornstein-Uhlenbeck) to gene expression data
 - Compare models to identify genes under selection vs. neutral drift
 - Analyze regime-specific evolutionary dynamics across lineage trajectories
-- Perform model selection using information criteria (AICc)
+- Perform model selection using information criteria (AIC)
 
-### Features
-
-- **Multiple evolutionary models**: Support for BM1 (single-rate Brownian Motion), OU1 (single-optimum OU), and OUM (multi-optimum OU) models
-- **Parallel processing**: Efficient model fitting across multiple genes using parallel computation
-- **Flexible data preparation**: Built-in normalization, smoothing, and ancestral state inference
-- **Comprehensive model selection**: Automated calculation of AICc weights, delta AICc, and other fit metrics
-- **Regime annotation**: Support for custom regime classifications across the lineage tree
-
-
+SCOUT has three available versions. SCOUT-EM is an expectation-maximization approach which assumes an unobserved latent expression state governed by the evolutionary dyanmics of the OU-model. Thus, expression is estimated in its latent state in the E-step of the model. OU-parameters are estimated in the M-step. SCOUT, or SCOUT-SM is a baseline framework which uses a lineage smoothing preprocessed step to handle transcriptional noise. The OU-parameters are optimized akin to just the M-step with no additional noise modeling. Finally, we also include the option to run the model a concept called 'tip-fog' which models measurement error from the assumed evolutionary model. For for information on tip-fog, check out: [Beaulieu and O'Meara 2025](https://academic.oup.com/evolut/article/79/7/1131/8104471).
 
 ### Dependencies
 
 SCOUT relies on the following R packages:
-- `future` - running parallel jobs
-- `dplyr` - Data manipulation
-- `ape` - Phylogenetic analyses
-- `OUwie` - OU model fitting
-- `foreach`, `doParallel`, `parallel` - Parallel processing
-- `castor` - Tree manipulation and ancestral state reconstruction
-- `reshape2` - Data reshaping
-- `caret` - Model evaluation
+- `future.apply` - Parallelization 
+- `ape`, `paleotree` - Phylogenetic analyses
 - `TedSim` - Simulation framework (install from GitHub: `Galaxeee/TedSim`)
-
+- `corpcor` - Matrix operations
+- `nloptr` - Optimization
+- 
 Most should be installed 
 
 ### Installation
@@ -64,7 +51,7 @@ BiocManager::install("Rtsne")
 devtools::install_github("Galaxeee/TedSim")
 ```
 
-Once TedSim is installed you can install Scout:
+Once TedSim is installed you can install SCOUT:
 
 ```r
 # Install SCOUT from GitHub
@@ -78,20 +65,6 @@ SCOUT requires two main inputs:
 
 1. **Phylogenetic tree**: A Newick format file containing the single-cell lineage tree
 2. **Metadata**: A CSV file with cell barcodes, gene expression values, and regime annotations
-
-#### Step 2: Prepare inputs for model fitting
-
-```r
-# Prepare data with normalization and smoothing
-inputs <- prepare_data(
-  tree_path = tree,           # path to newick file
-  metadata_path = meta,       # path to metadata file
-  outpath = outdir,           # output directory
-  regimes = c("BM1", "OU1", "OUM"),  # substitute OUM for column names in metadata with regime annotation
-  normalize = TRUE,           # if using counts (applies log normalization)
-  smoothing = 10              # smoothing parameter for count data
-)
-```
 
 **Example metadata format:** 
 | cellBC             | OU4 | HES4      | ISG15     | AGRN      | SDF4      |
@@ -107,32 +80,38 @@ inputs <- prepare_data(
 - `OU4` is a regime column (containing regime labels like LL, RL, M, Liv)
 - Remaining columns contain gene expression values (can be raw counts or normalized)
 
-#### Step 3: Fit models in parallel
+### Running SCOUT
+#### Workflow 
+First, `formatSCOUT` prepares the data for analysis with the core function in the model `runSCOUT`. This produces an rds file with annotations and further post-processing is needed to extract gene names and annotations. The wrapper function `SCOUT` runs all steps and returns a table with genes and annotations, as well as $\alpha$ and $\sigma^2$ parameter estimates. Since, $\theta$ estimates differ by model, those are returned separately. 
 
+**Key parameters**: 
+* *counts.file* | Path to counts file with OUx annotations for any non-BM/OU1 hypotheses. Key columns: 'species' (or specify the column name with the tip-labels with the argument 'species_key'), OUx, genes. 
+* *tree.file* | Path to tree newick file. Tip labels should match counts file.
+*  *results.dir* | Output path. SCOUT writes results to this directory.
+*   *regimes* | Regimes of interest. Defaults to BM, recommended to run BM1, OU1, and OUX. 
+* *blacklist* | Test genes are automatically inferred from the column names in the counts file. If there are any columns that are not either the species identifier or an OUX model, list here to avoid being considered a 'gene'.
+* *method* | EM (full EM model), SM (smoothing model), MTF (tip fog model). Default is EM.
+* *normalize* | Boolean whether to normalize counts. Set to FALSE if already normalized.
+* *scale_tree* | Boolean whether to scale the tree height to 1. Recommended for small branch length trees.
+*  **Model-Specific Parameters**
+    - smoothing_k | (int) default = 8, higher values reads in information from farther away leaves.
+    - tau_prior_sd and tau_prior_mean | [0, 1] control on the tau prior for the EM model. Recommended < 0.4.
+    - fixed.root | whether the root is estimated or 'absorbed' into the initial regime (not estimated). Default is fixed.
+    - lambda1 and lambda2 | [0,1] how much weight to place on the priors. Both should be non-zero for best performance. Both default to 0.2.
+      
 ```r
-# Fit evolutionary models to gene expression data
-results <- fitModel(
-  inputs,
-  cores = 4,                          # number of parallel cores
-  write = TRUE,                       # save results to disk
-  outpath = outdir,                   # output directory
-  testgenes = c('HES4', 'ISG15', 'AGRN', 'SDF4')  # genes to test (leave empty to test all)
+# Minimal example for SCOUT-EM
+scout.res <- SCOUT(counts.file = <path to counts file>,
+    tree.file = <path to tree file>,
+    results_dir = <outpath>,
+    regimes = c("BM1", "OU1", "OUX"),
+    cores = 16,
+	logfile = 'logfile.log',
+	verbose=TRUE
 )
 ```
 
-#### Step 4: Calculate model fit metrics
-
-```r
-# Summarize and calculate fit metrics (AICc weight, delta AICc, etc.)
-results <- get_fit_metrics(results, write = FALSE)
-```
-
-#### Step 5: Perform model selection
-
-```r
-# Returns dataframe with final model per gene
-final_results <- process_results(results)
-```
+This returns a list with a dataframe of gene annotations (best fit models) and a list of dataframes with parameter estimates corresponding to each model fit. 
 
 ### Understanding the Models
 
@@ -140,31 +119,11 @@ final_results <- process_results(results)
 - **OU1** (Single Ornstein-Uhlenbeck): Models evolution toward a single optimum with selection strength α and trait optimum θ.
 - **OUM** (Multiple Optima OU): Models evolution with different trait optima for different regimes (e.g., different cell types or lineages).
 
-### Additional Parameters
-
-The `prepare_data()` function supports many optional parameters:
-
-- `species_key`: Column name for species/cell ID (default: looks for 'species' column)
-- `anc_infer`: Ancestral state inference method ('ape', 'castor', or 'skip')
-- `resolve`: Tree multifurcation resolution method
-- `algorithm`: OUwie algorithm to use (default: 'three.point')
-- `floor`: Numeric floor for zero counts
-- `blacklist`: Vector of column names to exclude from analysis
-
 ### Examples and Vignettes
 
 See detailed examples in the `examples/` directory:
   - **SimulationVignette.ipynb**: Walkthrough using simulated data to demonstrate SCOUT workflow
   - **simulate_data/**: Scripts for generating simulation datasets
-
-### Output
-
-SCOUT produces several outputs:
-
-- Model fit objects for each gene-regime combination
-- AICc values and weights for model comparison
-- Parameter estimates (α, σ², θ) for OU models
-- Final model selection results with best-fit model per gene
 
 ### Citation
 
