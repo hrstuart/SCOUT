@@ -6,7 +6,7 @@
 
 Given a single-cell lineage tree, fit gene expression to evolutionary models to profile selection and drift.
 
-<img src="https://github.com/hrstuart/SCOUT/blob/main/images/SCOUT_workflow.png" alt="Graphical abstract of SCOUT" width="450" />
+<img src="https://github.com/hrstuart/SCOUT/blob/main/images/SCOUT_workflow.png" alt="Graphical abstract of SCOUT" width="550" />
 
 Check out our pre-print [here](https://www.biorxiv.org/content/10.1101/2025.11.12.688020v1)! 
 ### Overview
