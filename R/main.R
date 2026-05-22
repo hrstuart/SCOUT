@@ -1,5 +1,21 @@
+#' Wrapper function to run SCOUT 
+#' @param counts.file path to a counts file with a columns for species and relevent columns for evolutionary models being tested if an OUX. Other columns will be genes. 
+#' @param tree.file path to newick file. tips match species names in counts.
+#' @param results_dir output directory
+#' @param regimes a list of regimes to test. This include specifying BM1, OU1, and OUx where OUx correspond to columns in the counts file.
+#' @param species_key if the species column is not called 'species' (rather cellBC for example), indicate the correct name here. 
+#' @param blacklist genes for testing are inferred automatically. if any columns in the counts file are not for testing and not either the species key or model name, list them here.
+#' @param method one of EM (expectation-maximization), SM (smoothing), MTF (tip fog).
+#' @import paleotree
+#' @import corpcor
+#' @import nloptr
+#' @import future.apply 
+#' @import ape
+#' @import phylolm
+#' @export
 SCOUT <- function(counts.file, tree.file, results_dir, 
 	regimes, 
+	species_key = 'species',
 	blacklist = NULL, 
 	method = 'EM',
 	testid = NULL, 
@@ -54,6 +70,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 
     idata <- formatSCOUT(tree_path = tree, 
       metadata_path = counts, 
+      species_key = species_key, 
       anc_infer = 'ape', 
       outpath = results_dir, 
       regimes = regimes,
@@ -78,7 +95,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 
     filename <- sprintf('%s/%s_%s.rds', results_dir, tid, format(Sys.Date(), "%Y%m%d"))
     saveRDS(full.res, filename)
-    log_message(sprintf('Done with initial analysis of %s.', tid, as.character(i)), logfile, verbose=TRUE)
+    log_message(sprintf('Done with initial analysis of %s.', tid), logfile, verbose=TRUE)
     log_message('=========================================================\n', logfile, verbose=TRUE)
     log_message(sprintf('Processsing Results... Saving files to %s', results_dir), logfile, verbose=TRUE)
 
@@ -94,9 +111,18 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 	write.csv(annotated, sprintf('%s/%s_all_genes_full_history.csv', results_dir, tid))
 
 	annotate_history_select <- annotated %>% filter(delta_AIC == 0)
-	write.csv(annotate_history_select, sprintf('%s/%s_annotated_best_fit.csv', results_dir))
+	write.csv(annotate_history_select, sprintf('%s/%s_annotated_best_fit.csv', results_dir, tid))
 
-	return(annotate_history_select)
+
+  thetas <- list()
+  params.full <- extract_parameters(full.res)
+  for (r in idata$regimes){
+    tmp <- parse_nested_to_df(params.full, r)
+    thetas[[r]] <- tmp 
+    write.table(tmp, sprintf('%s/%s_all_genes_%s_parameters.csv', results_dir, tid, r))
+  }
+
+	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas))
 
 }
 

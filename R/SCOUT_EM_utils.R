@@ -1086,6 +1086,8 @@ infer_anc <- function(phy, mode='ape') {
     return(phy)
 }
 ######### FROM runSCOUT.R, prepare_data 
+#' @export
+#' @import ape 
 formatSCOUT <- function(tree_path, metadata_path, outpath, 
     species_key = NULL, 
     quant_traits = NULL,
@@ -1263,7 +1265,11 @@ formatSCOUT <- function(tree_path, metadata_path, outpath,
         anc_infer = infer_anc))
 }
 
-
+#' Main runner 
+#' @export
+#' @import progressr
+#' @import nloptr
+#' @import future.apply 
 runSCOUT<- function(idata, 
     lambda1, 
     lambda2, 
@@ -1353,7 +1359,11 @@ runSCOUT<- function(idata,
     return(results)
 }
 
-
+#' Main runner but in batches, helpful for large trees.
+#' @export 
+#' @import progressr
+#' @import nloptr
+#' @import future.apply  
 runSCOUT.batches <- function(idata, 
     lambda1, 
     lambda2, 
@@ -1521,7 +1531,8 @@ combine_disk_batch <- function(results_dir, tid, batch_size=10, tmpdir='./tmp', 
 
 }
 
-
+#' Function to get parameters out of the model. 
+#' @export 
 extract_parameters <- function(results_list){
     per_model_list <- list()
     for (res in results_list){
@@ -1543,6 +1554,33 @@ extract_parameters <- function(results_list){
         }
     }
     return(per_model_list)
+}
+
+parse_nested_to_df <- function(x,
+                               top_name = NULL,
+                               rownames_as = "gene_name",
+                               tibble = FALSE) {
+
+  if (!is.null(top_name)) {
+    if (!is.list(x) || is.null(x[[top_name]])) {
+      stop("`top_name` not found in supplied list.")
+    }
+    sublist <- x[[top_name]]
+  } else {
+    sublist <- x
+  }
+
+  if (!requireNamespace("dplyr", quietly = TRUE)) {
+    stop("Package 'dplyr' is required for this function.")
+  }
+
+  out <- dplyr::bind_rows(sublist, .id = rownames_as)
+  if (tibble) {
+    # `bind_rows` already returns a tibble if dplyr ≥ 1.0.0
+    return(out)
+  } else {
+    return(as.data.frame(out, stringsAsFactors = FALSE))
+  }
 }
 
 create_directory_if_not_exists <- function(directory_path, message = TRUE) {
