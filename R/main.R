@@ -12,6 +12,7 @@
 #' @import future.apply 
 #' @import ape
 #' @import phylolm
+#' @import dplyr stringr
 #' @export
 SCOUT <- function(counts.file, tree.file, results_dir, 
 	regimes, 
@@ -31,6 +32,8 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 	logfile = NULL, 
 	verbose = TRUE
 	){
+
+  create_directory_if_not_exists(results_dir)
 
 	log_message(sprintf('Started logging @ %s', logfile), verbose = verbose)
 	log_message(sprintf('Data will be saved to --> %s', results_dir), logfile, verbose=verbose)
@@ -75,7 +78,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
       outpath = results_dir, 
       regimes = regimes,
       normalize = normalize,
-      smoothing_k = ska, ## this should be null 
+      smoothing_k = ska, 
       blacklist = blacklist, 
       logfile=logfile)
 
@@ -105,12 +108,15 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 
 
 	annotated <- annotate_history(history, datasetid = 'dataset') %>% 
-	    arrange(AICc) %>% mutate(AICc_next_worse = lead(AICc) - AICc) %>% 
-	    arrange(AIC) %>%  mutate(AIC_next_worse = lead(AIC)-AIC) %>% ungroup() %>% 
-	                      arrange(gene_name)
+	    arrange(AICc) %>% 
+      mutate(AICc_next_worse = lead(AICc) - AICc) %>% 
+	    arrange(AIC) %>%  
+      mutate(AIC_next_worse = lead(AIC)-AIC) %>% ungroup() %>% arrange(gene_name)
 	write.csv(annotated, sprintf('%s/%s_all_genes_full_history.csv', results_dir, tid))
 
-	annotate_history_select <- annotated %>% filter(delta_AIC == 0)
+	annotate_history_select <- annotated %>% filter(delta_AIC == 0) %>%
+    dplyr::select(iter, ll_total, sigma, alpha, tau, converge, gene_name, regime, model, param.count, ntips, AIC, AIC_weight)
+  names(annotate_history_select)[which(names(annotate_history_select) == 'll_total')] <- 'loglik'
 	write.csv(annotate_history_select, sprintf('%s/%s_annotated_best_fit.csv', results_dir, tid))
 
 
@@ -122,7 +128,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     write.table(tmp, sprintf('%s/%s_all_genes_%s_parameters.csv', results_dir, tid, r))
   }
 
-	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas))
+	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas, SCOUT_input = idata))
 
 }
 

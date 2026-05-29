@@ -1,8 +1,6 @@
 
 ####### EM #######
-# Proceeding this: 
-# Need: estimates for alpha, sigma, theta , tau 
-# Constants/defaults: edges, phy, root.state, assume.station 
+
 e_step <- function(X, phy, edges, paras, defaults, diagnose=TRUE){
     #V <- quickVCV(phy, paras$alpha, paras$sigma, defaults$scaleHeight)
     if (defaults$weight_type == 'alt'){
@@ -183,9 +181,10 @@ m_step_tipfog <- function(Z, X, params_init, phy, edges, defaults, lambda1, lamb
         } else {
           V_ <- varcov.ou(phy, edges, alpha, sigma, defaults$root.state, defaults$scaleHeight, defaults$assume.station)
         }
-          #V_ <- compute_VCV(defaults$parsed_alt_tree, alpha, sigma, add.root=defaults$add.root) # stop gap will fix. 
-          if (!defaults$skipTau) diag(V_) <- diag(V_) + diag(tau^2, nrow(V_)) # adding tip fog in here. 
-          ll_ou <- loglik_OU_inverse(Z, W_, V_) 
+        
+        if (!defaults$skipTau) diag(V_) <- diag(V_) + diag(tau^2, nrow(V_)) # adding tip fog in here. 
+        ll_ou <- loglik_OU_inverse(Z, W_, V_) 
+        
       }
     
 
