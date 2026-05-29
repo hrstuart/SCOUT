@@ -1,8 +1,6 @@
 ## For one iter 
 
 ####### SUPPORT FUNCTIONS #######
-# This assumes a stationary theta. -- double check that this makes sense
-# Might need to make appropriate changes for BM1. 
 
 transformPhy.new <- function(phy, map, Alpha_j, Sigma_j, tip.paths = NULL) {
     # This is the new transformPhy from OUwie but reduced so that it only needs a single alpha and sigma command. 
@@ -308,7 +306,7 @@ quickVCV <- function(phy, alpha, sigma.sq, scaleHeight){
     return(vcv)
 }
 
-######## NEW UTILITY FUNCTIONS -- Claude support 
+######## NEW UTILITY FUNCTIONS ########
 compute_W_matrix <- function(tree_info, alpha, normalize=FALSE, add.root=TRUE) {
   n_leaves <- tree_info$n_leaves
   regimes <- tree_info$unique_regimes
@@ -332,7 +330,6 @@ compute_W_matrix <- function(tree_info, alpha, normalize=FALSE, add.root=TRUE) {
 
   root <- sapply(1:n_leaves, function(i){exp(-alpha * tree_info$leaf_dists[i])})
   W[, root.state] <- W[,root.state]+root # changing so that the root is already a column in here! 
-  # just kidding thats a larger change because need to change the root.state variable and I am hesitant to do that. 
   # also adding the cbind ensures that we get two columns for BM1. 
   #if (!add.root){
   #      W[, root.state] <- W[,root.state]+root
@@ -440,7 +437,7 @@ get_path_from_root <- function(tree, tip_index) {
 }
 
 
-######## OTHER UTILITY FUNCTIONS --- cite Beaulieu et al / OUwie 
+######## OTHER UTILITY FUNCTIONS --- citation Beaulieu et al / OUwie  ########
 #### THREE POINT SUPPORT FUNCTIONS 
 #OU functions for using three-point algorithm of Ho and Ane 2013
 
@@ -503,6 +500,7 @@ getPathToRoot <- function(phy, tip){
   return(path)
 }
 
+##### Old Set up #####
 # Need to be careful because this needs to be of length 1 if BM1 invert. 
 # k = 1 for OU1 and BM1. n = nstates for OUM. This SHOULD work out to be the adjustment needed for the three.point algorithm.  
 establishBounds <- function(model, algorithm, k, get.root.theta, em=NULL, lb=1e-9, ub=1e5){
@@ -714,142 +712,6 @@ lineage_smooth <- function(tree_, lognorm__, ka, s=NULL) {
     return(smoothed_data)
 }
 
-####=======#### 
-
-preprocess.OLD <- function(inputs, reg, gene_name, 
-    scaleHeight = FALSE, 
-    root.station = FALSE, 
-    get.root.theta = FALSE, 
-    root.age = NULL ){
-
-    phy <- inputs$inputs[[reg]]$tree
-    model <- inputs$inputs[[reg]]$model # model now the actual model being tested NOT the regime. so in OU1, BM1, or OUM. 
-    reg_col <- inputs$inputs[[reg]]$rcol # this is the name of the column in the object with the regime. 
-    
-    if (!gene_name %in% colnames(inputs$meta_data)){
-        stop('Gene name not in data. Try again.')
-    }
-
-    if (!reg_col %in% colnames(inputs$meta_data)){
-        stop('Model not annotated in metadata. Add to data.')
-    }
-        
-    data.orig <- inputs$meta_data[, c('species', reg_col, gene_name)]
-    phy <- reorder.phylo(phy, "cladewise")
-        
-    if(model == "BM1" & root.station == FALSE) { get.root.theta = TRUE } ## Need to check whats up with this. 
-        
-    data <- data.frame(data.orig[, c(reg_col, gene_name)], row.names = data.orig[, 'species'])
-    #print(head(data))
-        
-    # Initialize constants. 
-    shift.point=0.5
-    data <- data[phy$tip.label,]
-    tip.states.cp <- factor(data[,1]) # not sure if this is used ever. 
-    ntips <- length(phy$tip.label)
-    Tmax.i <- max(MakeAgeTable(phy, root.age=root.age)) # with root.age == NULL 
-        
-        #### Establish a bunch of values used later. 
-    if (model %in% c('BM1', 'OU1')){
-          #Begins the construction of the edges matrix -- similar to the ouch format##
-          #Makes a vector of absolute times in proportion of the total length of the tree
-          k <- 1
-          phy$node.label <- rep(1, Nnode(phy))
-          tip.states <- factor(rep(1, length(data[,1])))
-          int.states <- factor(phy$node.label)
-          tot.states <- factor(c(phy$node.label,tip.states))
-          
-          #Obtain root state -- for both models assume the root state to be 1 since no other state is used even if provided in the tree
-          root.state <- 1
-    } else {
-          #Obtain a a list of all the regime states. This is a solution for instances when tip states and
-          #the internal nodes are not of equal length:
-          tot.states <- factor(c(phy$node.label,as.character(data[,1])))
-          k <- length(levels(tot.states))
-          int.states <- factor(phy$node.label)
-          phy$node.label <- int.states# as.numeric(int.states)
-          tip.states <- factor(data[,1])
-          data[,1] <- as.numeric(tip.states)
-          #Obtain root state and internal node labels
-          root.state <- phy$node.label[1]
-          int.state <- phy$node.label[-1]
-    }
-        
-    edges <- makeEdges(phy, data, model, k, Tmax.i, int.state, root.age, scaleHeight)
-        
-    map <- getMapFromNode(phy, tip.states, int.states, shift.point)
-    if(scaleHeight==TRUE){
-        map <- lapply(map, function(x) x/Tmax.i)
-    }
-        
-    if(scaleHeight==TRUE){
-        phy$edge.length <- phy$edge.length/Tmax.i
-        Tmax <- 1
-        root.age <- 1
-    } else {
-        Tmax <- Tmax.i
-    }
-        
-    phy$states <- factor(data[phy$tip.label, 1])
-
-    X <- inputs$meta_data[, gene_name] #res$X
-    names(X) <- inputs$meta_data[, 'species'] #row.names(res) #inputs$meta_data[, 'species']
-
-    map <- getMapFromNode(phy, tip.states, int.states, shift.point)
-    if(scaleHeight==TRUE){
-        phy$edge.length <- phy$edge.length/Tmax.i
-        map <- lapply(map, function(x) x/Tmax.i)
-        Tmax <- 1
-        root.age <- 1
-    } else {
-        Tmax <- Tmax.i
-    }
-
-    tip.paths <- lapply(1:length(X), function(x) getPathToRoot(phy, x))
-
-    alpha.i <- log(2)/Tmax
-    tau.i <- sd(as.vector(X))
-    sigma.i <- mean(pic(X, phy)^2)
-    means.by.reg.init <-  tapply(X, data[,1], mean)
-
-    if (get.root.theta == TRUE){
-        # For BM1: Assumed to be the same as the expected value, so pulled once in the optimization and for the Wmat calculation 
-        # For OU+: NOT assumed to be the same so included in the parameter opimization twice. 
-        # This will solve the issues with calculating the W matrix but requires some reformatting for the optimzation problem. 
-        assume.station = FALSE 
-        # build theta0 into theta if asking to get root theta. 
-        if (model == 'BM1'){
-            theta <- c( means.by.reg.init) 
-            names(theta) <- c('root')
-        } else {
-            theta <- c(means.by.reg.init[root.state], means.by.reg.init) 
-            names(theta) <- c('root', names(means.by.reg.init))
-        }
-    } else {
-        assume.station = TRUE
-        theta <-c(means.by.reg.init)
-    }
-
-    defaults <- list('root.state' = root.state,  'assume.station' = assume.station, 
-                    'scaleHeight' = scaleHeight , 
-                    'model' = model, 
-                    tp_const = list( 'tippath' = tip.paths, 'map' = map))
-
-    cat('Running with defaults:\n')
-    cat(sprintf('\troot.state = %s | assume.station = %s | scaleHeight = %s | model = %s\n', root.state, assume.station, scaleHeight, model))
-
-    #names(means.by.reg.init) <- NULL
-    if (model == 'BM1'){
-        # Need to add a constant tiny alpha for BM1 to all the above code. 
-        par0 <- list('tau' = tau.i, alpha = 1e-10, 'sigma' = sigma.i, 'theta' = theta) # tau, alpha, sigma2, means.by.regime. 
-    } else {
-        par0 <- list('tau' = tau.i, 'alpha' = alpha.i, 'sigma' = sigma.i, 'theta' = theta) # tau, alpha, sigma2, means.by.regime. 
-    }
-   
-    return(list(param_init = par0, defaults = defaults, X = X, phy = phy, edges = edges))
-
-}
-
 ##################################################################################
 
 preprocessTree <- function(inputs, reg, 
@@ -1049,7 +911,7 @@ preprocessGene <- function(inputs, gene_name, tree_const, root.state, root.fixed
 }
 
 
-#### OTHER SCOUT UTILS 
+######## OTHER SCOUT UTILS ########
 log_message <- function(message, log_file = NULL, verbose = FALSE) {
   timestamped_msg <- paste0(Sys.time(), " | ", message)
   
@@ -1085,7 +947,7 @@ infer_anc <- function(phy, mode='ape') {
 
     return(phy)
 }
-######### FROM runSCOUT.R, prepare_data 
+######### adapting runSCOUT.R, prepare_data 
 #' @export
 #' @import ape 
 formatSCOUT <- function(tree_path, metadata_path, outpath, 
@@ -1099,7 +961,6 @@ formatSCOUT <- function(tree_path, metadata_path, outpath,
     blacklist = NULL, 
     logfile=NULL) {
 
-    create_directory_if_not_exists(outpath)
     if (class(metadata_path) == 'data.frame'){
         meta <- metadata_path
     } else {
@@ -1618,7 +1479,7 @@ check_tree_health <- function(phy) {
   }
 }
 
-# In your EM loop, before running EM:
+# In EM loop, before running EM:
 verify_initial_params <- function(paras, defaults, verbose=TRUE) {
   
   if (verbose){

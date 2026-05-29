@@ -17,5 +17,9 @@ Imports:
     parallel,
     castor,
     reshape2,
-    caret
+    phylolm,
+    corpcor,
+    paleotree,
+    nloptr,
+    Matrix
 RoxygenNote: 7.3.2
