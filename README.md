@@ -106,9 +106,22 @@ scout.res <- SCOUT(counts.file = <path to counts file>,
 	logfile = 'logfile.log',
 	verbose=TRUE
 )
-```
 
+# With example data:
+scout.res <- SCOUT(counts.file = './sim_example/3state_n256_alpha_3_sigma_1_counts.csv',
+    tree.file = './sim_example/3state_n256_casNJ_tree.nwk',
+    results_dir = "../output/3state_SCOUT",
+    regimes = c("BM1", "OU1", "OUM"),
+    cores = 32, 
+    logfile = '../output/3state_SCOUT/logfile.log', 
+    verbose=TRUE
+)
+```
 This returns a list with a dataframe of gene annotations (best fit models) and a list of dataframes with parameter estimates corresponding to each model fit. 
+
+#### Vignettes
+1. [Quick Start](https://github.com/hrstuart/SCOUT/blob/main/examples/QuickStart.ipynb)
+2. [Simuate and Run](https://github.com/hrstuart/SCOUT/blob/main/examples/SimulationAndAnalysisVignette.ipynb)
 
 ### Understanding the Models
 
