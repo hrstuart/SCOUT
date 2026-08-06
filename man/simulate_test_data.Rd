@@ -14,7 +14,8 @@ simulate_test_data(
   s,
   t0,
   theta_step,
-  nevfs = 20
+  nevfs = 20,
+  sim_lin = TRUE
 )
 }
 \arguments{

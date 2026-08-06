@@ -183,35 +183,49 @@ simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, ne
 #' @param nevfs Integer: Number of EVFs to generate. 
 #' @return List of results. The same set are also saved to outdir. 
 #' @export
-simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t0, theta_step, nevfs = 20) {
-	log_message(sprintf('Generating scLT data for %d cells.', ncells), verbose =TRUE)
-	log_message(sprintf('Files will be saved to %s.', outdir), verbose =TRUE)
+simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t0, theta_step, nevfs = 20, sim_lin=TRUE) {
+    if (sim_lin){
+        log_message(sprintf('Generating scLT data for %d cells.', ncells), verbose =TRUE)
+        log_message(sprintf('Files will be saved to %s.', outdir), verbose =TRUE)
 
-	test_dataset <- simulate_lineage(250, ncells, tree, outdir, out_prefix) # hardcoding this because we don't actually use these genes. 
-    #states <- test_dataset[[3]][,2]; names(states) <- paste0('t',test_dataset[[3]][,4])
-    metadata_f <- data.frame(test_dataset[[3]])
-    metadata_f$cellID <- paste0('t', metadata_f$cellID)
+        test_dataset <- simulate_lineage(250, ncells, tree, outdir, out_prefix) # hardcoding this because we don't actually use these genes. 
+        #states <- test_dataset[[3]][,2]; names(states) <- paste0('t',test_dataset[[3]][,4])
+        metadata_f <- data.frame(test_dataset[[3]])
+        metadata_f$cellID <- paste0('t', metadata_f$cellID)
 
-    metadata <- metadata_f[, c('cellID', 'cluster')]
-    metadata$cluster <- as.factor( metadata$cluster)
-    
-    #tree_$edge
-    full_annot <- as.data.frame(test_dataset[[4]])
-    full_annot <- full_annot[, c('cellID', 'cluster')]
-    full_annot$cluster <- as.factor( full_annot$cluster)
-    
-    tree_ <- test_dataset[[1]]
+        metadata <- metadata_f[, c('cellID', 'cluster')]
+        metadata$cluster <- as.factor( metadata$cluster)
+        
+        #tree_$edge
+        full_annot <- as.data.frame(test_dataset[[4]])
+        full_annot <- full_annot[, c('cellID', 'cluster')]
+        full_annot$cluster <- as.factor( full_annot$cluster)
+        
+        tree_ <- test_dataset[[1]]
 
-    value_lookup <- setNames(full_annot$cluster, full_annot$cellID)
-    for (nid in unique(tree_$edge[, 1])) {
-        if (nid %in% names(value_lookup)) {
-            tree_$node.label[nid] <- as.character(value_lookup[[as.character(nid)]])
+        value_lookup <- setNames(full_annot$cluster, full_annot$cellID)
+        for (nid in unique(tree_$edge[, 1])) {
+            if (nid %in% names(value_lookup)) {
+                tree_$node.label[nid] <- as.character(value_lookup[[as.character(nid)]])
+            }
         }
-      }
-    lower.bound <- ncells+1
-    tree_$node.label <- tree_$node.label[lower.bound:nrow(full_annot)]
+        lower.bound <- ncells+1
+        tree_$node.label <- tree_$node.label[lower.bound:nrow(full_annot)]
+        nstates <- length(unique(metadata$cluster))
+    } else {
+        if (is.null(tree$node.label)){
+            stop('Internal nodes are not labelled with states. Either simulate a new tree with sim_lin=TRUE or label internal nodes and rerun.')
+        } 
+
+        if (!'states' %in% names(tree)){
+            stop('State labels are not in tree under `states`, add to tree or simulate a new tree with sim_lin=TRUE.')
+        } 
+        nstates <- length(unique(tree$states))
+        metadata <- data.frame(cellID = tree$tip.label, cluster = tree$states)
+        tree_ <- tree
+        test_dataset = NULL
+    }
     
-    nstates <- length(unique(metadata$cluster))
     combos = expand.grid(a, s)
     simulated_res = list('counts' = list(), 'evfs' = list())
     log_message(sprintf('Simulating OU genes for %d parameter combinations.', nrow(combos)), verbose =TRUE)

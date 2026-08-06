@@ -924,6 +924,7 @@ log_message <- function(message, log_file = NULL, verbose = FALSE) {
   }
 }
 
+#' @export
 infer_anc <- function(phy, mode='ape') {
     if (mode == 'ape'){
         anc_res <- ape::ace(phy$states, 

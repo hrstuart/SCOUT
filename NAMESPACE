@@ -3,6 +3,7 @@
 export(SCOUT)
 export(extract_parameters)
 export(formatSCOUT)
+export(infer_anc)
 export(runSCOUT)
 export(runSCOUT.batches)
 export(simulate_lineage)
