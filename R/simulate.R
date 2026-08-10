@@ -320,6 +320,13 @@ OUwie.sim.edited <- function(phy=NULL, data=NULL, simmap.tree=FALSE, root.age=NU
         }
     }
 
+    # The simulation loop below walks the edge matrix in order and reads the ancestor's
+    # already-simulated value, so every parent edge has to come before its children. Trees
+    # read from newick are cladewise already, but ones built programmatically (e.g. by
+    # castor::generate_tree_hbd_reverse) need not be -- and on those the root value and the
+    # whole phylogenetic covariance are silently lost.
+    phy <- reorder.phylo(phy, "cladewise")
+
     bt <- branching.times(phy)
     if(is.null(root.age)){
         if(any(bt<0)){
