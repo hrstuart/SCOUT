@@ -91,7 +91,7 @@ SampleDen <- function(nsample,den_fun){
 #' @return params a matrix of ngenes * 3
 #' @examples 
 #' Get_params()
-Get_params <- function(gene_effects,evf,match_param_den,bimod,scale_s){
+Get_params.OLD <- function(gene_effects,evf,match_param_den,bimod,scale_s){
   params <- lapply(1:3, function(iparam){evf[[iparam]] %*% t(gene_effects[[iparam]])})
   scaled_params <- lapply(c(1:3),function(i){
     X <- params[[i]]
@@ -116,6 +116,70 @@ Get_params <- function(gene_effects,evf,match_param_den,bimod,scale_s){
   return(scaled_params)
 }
 
+#' Kinetic parameters from EVFs and gene effects.
+#'
+#' @param param_mode 'rank' (original SymSim behaviour) or 'affine'.
+#' @param signal_gain length-3 over c(kon, koff, s): per-gene dynamic range in log10 units. NA leaves
+#'   that parameter on the rank transform. Only used when param_mode = 'affine'.
+#' @param burst_scale multiplies kon and koff. Beta mean kon/(kon+koff) is unchanged, variance falls
+#'   ~1/burst_scale. 1 is the calibrated SymSim setting.
+#' @return list of three ngenes x ncells matrices: kon, koff, s.
+Get_params <- function(gene_effects, evf, match_param_den, bimod, scale_s,
+                          param_mode = c('rank', 'affine'),
+                          signal_gain = c(NA, NA, 0.3),
+                          burst_scale = 1) {
+
+  param_mode <- match.arg(param_mode)
+  if (length(signal_gain) == 1) signal_gain <- rep(signal_gain, 3)
+  if (length(signal_gain) != 3) stop('signal_gain must be length 1 or 3 (kon, koff, s).')
+
+  params <- lapply(1:3, function(iparam) { evf[[iparam]] %*% t(gene_effects[[iparam]]) })
+
+  scaled_params <- lapply(c(1:3), function(i) {
+    X <- params[[i]]                                   # ncells x ngenes
+
+    if (!(param_mode == 'affine' && !is.na(signal_gain[i]))) {
+      # ---- original SymSim path, verbatim (same plyr round-trip, same SampleDen RNG draw) ----
+      temp <- plyr::alply(X, 1, function(Y){Y})
+      values <- do.call(c, temp)
+      ranks <- rank(values)
+      sorted <- sort(SampleDen(nsample = max(ranks), den_fun = match_param_den[[i]]))
+      temp3 <- matrix(data = sorted[ranks], ncol = length(X[1, ]), byrow = T)
+      return(temp3)
+    }
+
+    # ---- affine path: preserve the latent trait's spread ----
+    ngenes  <- ncol(X)
+    Xc      <- sweep(X, 2, colMeans(X), '-')
+    # ONE pooled scale, not per-gene: genes genuinely differ in effect size (GeneEffects weights sum
+    # to mean 0, sd 2.2, so ~1 gene in 6 has a cancelled signal) and per-gene standardisation would
+    # flatten that real heterogeneity away.
+    sd_pool <- stats::median(apply(X, 2, stats::sd))
+    if (!is.finite(sd_pool) || sd_pool == 0) sd_pool <- 1
+
+    # Realistic per-gene baseline levels, assigned in the order the gene means already imply, so
+    # between-gene expression heterogeneity is unchanged and only the within-gene range moves.
+    mu_g <- sort(SampleDen(nsample = ngenes, den_fun = match_param_den[[i]]))[
+              rank(colMeans(X), ties.method = 'first')]
+
+    sweep(Xc / sd_pool * signal_gain[i], 2, mu_g, '+')
+  })
+
+  bimod_perc <- 1
+  ngenes <- dim(scaled_params[[1]])[2]; bimod_vec <- numeric(ngenes)
+  bimod_vec[1:ceiling(ngenes*bimod_perc)] <- bimod
+  bimod_vec <- c(rep(bimod, ngenes/2), rep(0, ngenes/2))
+  scaled_params[[1]] <- apply(t(scaled_params[[1]]),2,function(x){x <- 10^(x - bimod_vec)})
+  scaled_params[[2]] <- apply(t(scaled_params[[2]]),2,function(x){x <- 10^(x - bimod_vec)})
+  scaled_params[[3]] <- t(apply(scaled_params[[3]],2,function(x){x<-10^x}))*scale_s
+
+  if (burst_scale != 1) {
+    scaled_params[[1]] <- scaled_params[[1]] * burst_scale
+    scaled_params[[2]] <- scaled_params[[2]] * burst_scale
+  }
+
+  scaled_params
+}
 
 #' Getting the parameters for simulating gene expression from EVf and gene effects
 #'
