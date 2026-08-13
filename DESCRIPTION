@@ -21,5 +21,11 @@ Imports:
     corpcor,
     paleotree,
     nloptr,
-    Matrix
+    Matrix,
+    future,
+    future.apply,
+    progressr,
+    stringr
+Suggests:
+    testthat (>= 3.0.0)
 RoxygenNote: 7.3.2

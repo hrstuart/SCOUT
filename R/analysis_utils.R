@@ -43,30 +43,40 @@ extract_parameters <- function(results_list){
     return(per_model_list)
 }
 
-
+#' @export
 annotate_history <- function(dataset1, datasetid){
     grp1 <- c(datasetid, 'gene_name', 'regime')
     grp2 <- c(datasetid, 'gene_name')
     dataset2 <- dataset1 %>% group_by(!!!rlang::syms(grp1)) %>% 
         arrange(desc(iter)) %>% slice_head(n = 1) %>% ungroup() %>% 
         group_by(!!!rlang::syms(grp2))  %>% 
-        mutate(ntips = 256) %>%
         mutate(AIC = -2*ll_total+2*param.count, 
                AICc = -2*ll_total+(2*param.count*(ntips/(ntips-param.count-1))), 
                delta_AIC = AIC - min(AIC),
                delta_AICc = AICc - min(AICc), 
                AIC_weight = exp(-0.5 * delta_AIC) / sum(exp(-0.5 * delta_AIC)),
-               AICc_weight = exp(-0.5 * delta_AICc) / sum(exp(-0.5 * delta_AICc))) %>% ungroup() %>% 
+               AICc_weight = exp(-0.5 * delta_AICc) / sum(exp(-0.5 * delta_AICc)),
+               AICc_next_worse = lead(AICc) - AICc,
+               AIC_next_worse = lead(AIC) - AIC,
+               best_fit = ifelse(delta_AIC == 0, TRUE, FALSE)) %>% 
+               ungroup() %>% select(-c(delta_AIC, delta_AICc)) %>% 
         mutate(truth = str_extract(gene_name, 'BM1|OU1|OUM'))
 
     return(dataset2)
 }
 
 
-library(caret)
-library(dplyr)
-
-calculate_group_class_accuracy <- function(data, dataset_col = "dataset", 
+#' Per-group classification accuracy with binomial confidence intervals
+#' Summarises predicted vs true model class per dataset: overall accuracy with a binomial 95%
+#' CI, plus per-class sensitivity and specificity.
+#' @param data Data frame with one row per gene.
+#' @param dataset_col Column identifying the group to summarise within.
+#' @param model_col Column holding the selected model class.
+#' @param truth_col Column holding the true model class.
+#' @return Long data frame with `metric_type` in {Overall, Sensitivity}.
+#' @import dplyr
+#' @export
+calculate_group_class_accuracy <- function(data, dataset_col = "dataset",
                                            model_col = "model", truth_col = "truth") {
   
   # Convert to factors to ensure consistent levels
