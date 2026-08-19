@@ -114,7 +114,7 @@ generate_EvoEVFs <- function(real_tree, metadata, nevfs, a, s, t0, theta_step, n
     return(eevfs)
 }
 
-generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes, param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10){
+generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes, param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE){
     ecounts <- lapply(eevfs, function(imod){
         gene_effects <- GeneEffects(ngenes = ngenes, nevf = nevfs, randseed = 123, prob = 0.3, 
                                     geffect_mean = 0, geffect_sd = 1, is_in_module=0)
@@ -128,7 +128,7 @@ generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes, param_mo
                 })
 
         #params <- Get_params(gene_effects,imod,match_params_den,bimod=0,scale_s=10)
-        params <- Get_params(gene_effects, imod, match_params_den, bimod=0, scale_s, param_mode, signal_gain, burst_scale)
+        params <- Get_params(gene_effects, imod, match_params_den, bimod=0, scale_s, param_mode, signal_gain, burst_scale, support_clip)
         counts <- lapply(c(1:ngenes),function(i){
             count <- sapply(c(1:ncells),function(j){
                 y <- rbeta(1,params[[1]][i,j],params[[2]][i,j])
@@ -143,11 +143,11 @@ generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes, param_mo
 }
 
 simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, nevfs, ngenes, ncells, 
-    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10){ 
+    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE){ 
     # real_tree, metadata, nevfs, a, s, ngenes, n_states
 
     eevfs <- generate_EvoEVFs(tree_, metadata, nevfs, a, s, t0, theta_step, nstates)
-    res <- generate_EvoCounts(ncells, metadata, eevfs, nevfs,  ngenes, param_mode, signal_gain, burst_scale, scale_s)
+    res <- generate_EvoCounts(ncells, metadata, eevfs, nevfs,  ngenes, param_mode, signal_gain, burst_scale, scale_s, support_clip)
 
     #### GENERATE COUNTS DATA 
     counts <- do.call(rbind, res)
@@ -183,13 +183,16 @@ simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, ne
 #' @param theta_step Integer: Used to generate optimal values depending on the model. 
 #' @param nevfs Integer: Number of EVFs to generate. 
 #' @param param_mode Character: Either rank or affine. Controls whether OU-trait scale is preseved when moving to counts. 
+#' @param support_clip Logical: clamp affine-mapped kinetic parameters to the rank path's own
+#'   support (range of match_param_den[[i]]$x). Inert when param_mode = 'rank'. Bounds a single
+#'   gene-cell count at 10^4.043 * scale_s; without it the affine map is unbounded.
 #' @param signal_gain List: Default c(NA,NA,0.3). Controls the how much to scale the variance of an OU process before converting to counts. 
 #' @param burst_scale Integer: Default = 1. Controls level of transcriptional bursting. 
 #' @param scale_s Integer: Default = 10. Controls the rate of synthesis. 
 #' @return List of results. The same set are also saved to outdir. 
 #' @export
 simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t0, theta_step, nevfs = 20, sim_lin=TRUE, 
-    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10) {
+    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE) {
     if (sim_lin){
         log_message(sprintf('Generating scLT data for %d cells.', ncells), verbose =TRUE)
         log_message(sprintf('Files will be saved to %s.', outdir), verbose =TRUE)
@@ -241,7 +244,7 @@ simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t
 		s_i <- combos[i, 2]
 
 		OU_sim <- simulate_OU_genes(tree_, metadata, a_i, s_i, t0, theta_step, nstates, nevfs, ngenes, ncells,
-            param_mode, signal_gain, burst_scale, scale_s)
+            param_mode, signal_gain, burst_scale, scale_s, support_clip)
 
 		simulated_res$counts[[sprintf('a%.2f_s%.2f', a_i, s_i)]] <- OU_sim[['counts']]
 		simulated_res$evfs[[sprintf('a%.2f_s%.2f', a_i, s_i)]] <- OU_sim[['evfs']]

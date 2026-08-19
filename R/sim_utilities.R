@@ -123,11 +123,18 @@ Get_params.OLD <- function(gene_effects,evf,match_param_den,bimod,scale_s){
 #'   that parameter on the rank transform. Only used when param_mode = 'affine'.
 #' @param burst_scale multiplies kon and koff. Beta mean kon/(kon+koff) is unchanged, variance falls
 #'   ~1/burst_scale. 1 is the calibrated SymSim setting.
+#' @param support_clip clamp the affine-mapped log10 parameters to the same support the rank path
+#'   draws from, i.e. range(match_param_den[[i]]$x). Only used when param_mode = 'affine'; the rank
+#'   path cannot leave that support in the first place, so this is inert there. Without it the
+#'   affine map is unbounded and a single gene-cell count can reach ~1e6, far outside any real
+#'   scRNA-seq range. The bound on the s parameter is 10^4.043, so the count ceiling is
+#'   10^4.043 * scale_s.
 #' @return list of three ngenes x ncells matrices: kon, koff, s.
 Get_params <- function(gene_effects, evf, match_param_den, bimod, scale_s,
                           param_mode = c('rank', 'affine'),
                           signal_gain = c(NA, NA, 0.3),
-                          burst_scale = 1) {
+                          burst_scale = 1,
+                          support_clip = TRUE) {
 
   param_mode <- match.arg(param_mode)
   if (length(signal_gain) == 1) signal_gain <- rep(signal_gain, 3)
@@ -162,7 +169,16 @@ Get_params <- function(gene_effects, evf, match_param_den, bimod, scale_s,
     mu_g <- sort(SampleDen(nsample = ngenes, den_fun = match_param_den[[i]]))[
               rank(colMeans(X), ties.method = 'first')]
 
-    sweep(Xc / sd_pool * signal_gain[i], 2, mu_g, '+')
+    out <- sweep(Xc / sd_pool * signal_gain[i], 2, mu_g, '+')
+
+    # Clamp to the rank path's own support, so the two modes differ ONLY in how the latent trait is
+    # mapped inside that support and not in how far outside it they are allowed to go. SampleDen
+    # draws from match_param_den[[i]]$x, so this range is exactly what rank can produce.
+    if (support_clip) {
+      lim <- range(match_param_den[[i]]$x)
+      out[] <- pmin(pmax(out, lim[1]), lim[2])
+    }
+    out
   })
 
   bimod_perc <- 1
