@@ -781,20 +781,18 @@ preprocessTree <- function(inputs, reg,
         
     edges <- makeEdges(phy, data, model, k, Tmax.i, int.state, root.age, scaleHeight)
         
-    map <- getMapFromNode(phy, tip.states, int.states, shift.point)
-    if(scaleHeight==TRUE){
-        map <- lapply(map, function(x) x/Tmax.i)
-    }
+    #map <- getMapFromNode(phy, tip.states, int.states, shift.point)
+    #if(scaleHeight==TRUE){
+    #    map <- lapply(map, function(x) x/Tmax.i)
+    #}
         
-    if(scaleHeight==TRUE){
-        phy$edge.length <- phy$edge.length/Tmax.i
-        Tmax <- 1
-        root.age <- 1
-    } else {
-        Tmax <- Tmax.i
-    }
-        
-    phy$states <- tip.states
+    #if(scaleHeight==TRUE){
+    #    phy$edge.length <- phy$edge.length/Tmax.i
+    #    Tmax <- 1
+    #    root.age <- 1
+    #} else {
+    #    Tmax <- Tmax.i
+    #}
 
     map <- getMapFromNode(phy, tip.states, int.states, shift.point)
     if(scaleHeight==TRUE){
@@ -805,6 +803,10 @@ preprocessTree <- function(inputs, reg,
     } else {
         Tmax <- Tmax.i
     }
+        
+    phy$states <- tip.states
+
+
 
     # legacy parameters for OUwie functions. 
     if (root.fixed == TRUE){
