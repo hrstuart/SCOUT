@@ -29,7 +29,8 @@ Imports:
     rlang,
     stats,
     utils,
-    graphics
+    graphics,
+    expm
 Suggests:
     testthat (>= 3.0.0),
     phytools
