@@ -30,8 +30,8 @@ SCOUT(
   lambda_min = NULL,
   lambda_p_max = NULL,
   lambda_engine = "auto",
+  selection_ic = "AICc",
   hybrid = TRUE,
-  hybrid_ic = "AICc",
   hybrid_alpha = 0.05
 )
 }
@@ -63,12 +63,14 @@ LRT P <= lambda_p_max). At least one is required when \code{lambda_filter = TRUE
 \item{lambda_engine}{engine for \code{lambda_screen()}: 'auto' uses the fast engine on
 ultrametric trees and reports + falls back to the slow phytools engine otherwise.}
 
-\item{hybrid}{if TRUE and both BM1 and OU1 are among \code{regimes}, also run
-\code{run_hybrid_pipeline()} and write \code{<testid>_hybrid_calls.csv}. The AIC-based
-outputs are unchanged.}
+\item{selection_ic}{\code{'AICc'} or \code{'AIC'} for \code{scout_model_selection()}, whose
+per-gene table (selected model, weights, parameters, convergence flags, final_set) is written
+to \code{<testid>_model_selection.csv}. The AIC-based best-fit outputs are unchanged.}
 
-\item{hybrid_ic, hybrid_alpha}{information criterion and significance level for the hybrid
-selection.}
+\item{hybrid}{if TRUE and both BM1 and OU1 are among \code{regimes}, the selection uses the
+hybrid IC + LRT procedure (\code{select_model_hybrid()}); otherwise IC alone.}
+
+\item{hybrid_alpha}{significance level for the hybrid LRT.}
 }
 \description{
 Wrapper function to run SCOUT

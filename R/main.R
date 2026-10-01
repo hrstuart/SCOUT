@@ -15,11 +15,12 @@
 #'   LRT P <= lambda_p_max). At least one is required when \code{lambda_filter = TRUE}.
 #' @param lambda_engine engine for \code{lambda_screen()}: 'auto' uses the fast engine on
 #'   ultrametric trees and reports + falls back to the slow phytools engine otherwise.
-#' @param hybrid if TRUE and both BM1 and OU1 are among \code{regimes}, also run
-#'   \code{run_hybrid_pipeline()} and write \code{<testid>_hybrid_calls.csv}. The AIC-based
-#'   outputs are unchanged.
-#' @param hybrid_ic,hybrid_alpha information criterion and significance level for the hybrid
-#'   selection.
+#' @param selection_ic \code{'AICc'} or \code{'AIC'} for \code{scout_model_selection()}, whose
+#'   per-gene table (selected model, weights, parameters, convergence flags, final_set) is written
+#'   to \code{<testid>_model_selection.csv}. The AIC-based best-fit outputs are unchanged.
+#' @param hybrid if TRUE and both BM1 and OU1 are among \code{regimes}, the selection uses the
+#'   hybrid IC + LRT procedure (\code{select_model_hybrid()}); otherwise IC alone.
+#' @param hybrid_alpha significance level for the hybrid LRT.
 #' @import paleotree
 #' @import corpcor
 #' @import nloptr
@@ -51,8 +52,8 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 	lambda_min = NULL,
 	lambda_p_max = NULL,
 	lambda_engine = 'auto',
+	selection_ic = 'AICc',
 	hybrid = TRUE,
-	hybrid_ic = 'AICc',
 	hybrid_alpha = 0.05
 	){
 
@@ -162,22 +163,6 @@ SCOUT <- function(counts.file, tree.file, results_dir,
   names(annotate_history_select)[which(names(annotate_history_select) == 'll_total')] <- 'loglik'
 	write.csv(annotate_history_select, sprintf('%s/%s_annotated_best_fit.csv', results_dir, tid))
 
-  # Hybrid selection: IC for BM1 vs OU1, Bonferroni LRT vs OU1 for multi-regime winners.
-  hybrid_res <- NULL
-  if (hybrid && all(c('BM1', 'OU1') %in% regimes)) {
-    hybrid_res <- tryCatch(
-      run_hybrid_pipeline(annotated, ic = hybrid_ic, alpha = hybrid_alpha),
-      error = function(e) {
-        log_message(sprintf('Hybrid selection failed and was skipped: %s', conditionMessage(e)), logfile, verbose = TRUE)
-        NULL
-      })
-    if (!is.null(hybrid_res)) {
-      write.csv(hybrid_res, sprintf('%s/%s_hybrid_calls.csv', results_dir, tid), row.names = FALSE)
-    }
-  } else if (hybrid) {
-    log_message('Hybrid selection skipped: it needs both BM1 and OU1 in regimes.', logfile, verbose = verbose)
-  }
-
 
   thetas <- list()
   params.full <- extract_parameters(full.res)
@@ -187,8 +172,26 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     write.table(tmp, sprintf('%s/%s_all_genes_%s_parameters.csv', results_dir, tid, r))
   }
 
+  # Per-gene selection table: IC (or hybrid IC + LRT) call, weights, parameters, QC flags.
+  use_hybrid <- hybrid && all(c('BM1', 'OU1') %in% regimes)
+  if (hybrid && !use_hybrid) {
+    log_message('Hybrid selection needs both BM1 and OU1 in regimes; selecting by IC alone.', logfile, verbose = verbose)
+  }
+  selection <- tryCatch(
+    scout_model_selection(annotated, params = thetas, ic = selection_ic, hybrid = use_hybrid,
+      hybrid_alpha = hybrid_alpha, check_convergence = method == 'EM'),
+    error = function(e) {
+      log_message(sprintf('Model selection table failed and was skipped: %s', conditionMessage(e)), logfile, verbose = TRUE)
+      NULL
+    })
+  if (!is.null(selection)) {
+    write.csv(selection, sprintf('%s/%s_model_selection.csv', results_dir, tid), row.names = FALSE)
+    log_message(sprintf('Model selection (%s%s): %d of %d genes in final_set.', selection_ic,
+      if (use_hybrid) ' + hybrid LRT' else '', sum(selection$final_set), nrow(selection)), logfile, verbose = TRUE)
+  }
+
 	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas, SCOUT_input = idata,
-	  SCOUT_hybrid = hybrid_res, SCOUT_lambda = lambda_res))
+	  SCOUT_selection = selection, SCOUT_lambda = lambda_res))
 
 }
 
