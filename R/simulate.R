@@ -114,7 +114,7 @@ generate_EvoEVFs <- function(real_tree, metadata, nevfs, a, s, t0, theta_step, n
     return(eevfs)
 }
 
-generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes){
+generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes, param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE){
     ecounts <- lapply(eevfs, function(imod){
         gene_effects <- GeneEffects(ngenes = ngenes, nevf = nevfs, randseed = 123, prob = 0.3, 
                                     geffect_mean = 0, geffect_sd = 1, is_in_module=0)
@@ -127,8 +127,8 @@ generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes){
                     density(match_params[,i],n=2000)
                 })
 
-        params <- Get_params(gene_effects,imod,match_params_den,bimod=0,scale_s=10)
-
+        #params <- Get_params(gene_effects,imod,match_params_den,bimod=0,scale_s=10)
+        params <- Get_params(gene_effects, imod, match_params_den, bimod=0, scale_s, param_mode, signal_gain, burst_scale, support_clip)
         counts <- lapply(c(1:ngenes),function(i){
             count <- sapply(c(1:ncells),function(j){
                 y <- rbeta(1,params[[1]][i,j],params[[2]][i,j])
@@ -142,11 +142,12 @@ generate_EvoCounts <- function(ncells, metadata, eevfs, nevfs,  ngenes){
     })
 }
 
-simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, nevfs, ngenes, ncells){ 
+simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, nevfs, ngenes, ncells, 
+    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE){ 
     # real_tree, metadata, nevfs, a, s, ngenes, n_states
 
     eevfs <- generate_EvoEVFs(tree_, metadata, nevfs, a, s, t0, theta_step, nstates)
-    res <- generate_EvoCounts(ncells, metadata, eevfs, nevfs,  ngenes)
+    res <- generate_EvoCounts(ncells, metadata, eevfs, nevfs,  ngenes, param_mode, signal_gain, burst_scale, scale_s, support_clip)
 
     #### GENERATE COUNTS DATA 
     counts <- do.call(rbind, res)
@@ -181,37 +182,59 @@ simulate_OU_genes <- function(tree_, metadata, a, s, t0, theta_step, nstates, ne
 #' @param t0 Integer: Root theta values. 
 #' @param theta_step Integer: Used to generate optimal values depending on the model. 
 #' @param nevfs Integer: Number of EVFs to generate. 
+#' @param param_mode Character: Either rank or affine. Controls whether OU-trait scale is preseved when moving to counts. 
+#' @param support_clip Logical: clamp affine-mapped kinetic parameters to the rank path's own
+#'   support (range of match_param_den[[i]]$x). Inert when param_mode = 'rank'. Bounds a single
+#'   gene-cell count at 10^4.043 * scale_s; without it the affine map is unbounded.
+#' @param signal_gain List: Default c(NA,NA,0.3). Controls the how much to scale the variance of an OU process before converting to counts. 
+#' @param burst_scale Integer: Default = 1. Controls level of transcriptional bursting. 
+#' @param scale_s Integer: Default = 10. Controls the rate of synthesis. 
 #' @return List of results. The same set are also saved to outdir. 
 #' @export
-simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t0, theta_step, nevfs = 20) {
-	log_message(sprintf('Generating scLT data for %d cells.', ncells), verbose =TRUE)
-	log_message(sprintf('Files will be saved to %s.', outdir), verbose =TRUE)
+simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t0, theta_step, nevfs = 20, sim_lin=TRUE, 
+    param_mode='rank', signal_gain=c(NA,NA,0.3), burst_scale=1, scale_s=10, support_clip=TRUE) {
+    if (sim_lin){
+        log_message(sprintf('Generating scLT data for %d cells.', ncells), verbose =TRUE)
+        log_message(sprintf('Files will be saved to %s.', outdir), verbose =TRUE)
 
-	test_dataset <- simulate_lineage(250, ncells, tree, outdir, out_prefix) # hardcoding this because we don't actually use these genes. 
-    #states <- test_dataset[[3]][,2]; names(states) <- paste0('t',test_dataset[[3]][,4])
-    metadata_f <- data.frame(test_dataset[[3]])
-    metadata_f$cellID <- paste0('t', metadata_f$cellID)
+        test_dataset <- simulate_lineage(250, ncells, tree, outdir, out_prefix) # hardcoding this because we don't actually use these genes. 
+        #states <- test_dataset[[3]][,2]; names(states) <- paste0('t',test_dataset[[3]][,4])
+        metadata_f <- data.frame(test_dataset[[3]])
+        metadata_f$cellID <- paste0('t', metadata_f$cellID)
 
-    metadata <- metadata_f[, c('cellID', 'cluster')]
-    metadata$cluster <- as.factor( metadata$cluster)
-    
-    #tree_$edge
-    full_annot <- as.data.frame(test_dataset[[4]])
-    full_annot <- full_annot[, c('cellID', 'cluster')]
-    full_annot$cluster <- as.factor( full_annot$cluster)
-    
-    tree_ <- test_dataset[[1]]
+        metadata <- metadata_f[, c('cellID', 'cluster')]
+        metadata$cluster <- as.factor( metadata$cluster)
+        
+        #tree_$edge
+        full_annot <- as.data.frame(test_dataset[[4]])
+        full_annot <- full_annot[, c('cellID', 'cluster')]
+        full_annot$cluster <- as.factor( full_annot$cluster)
+        
+        tree_ <- test_dataset[[1]]
 
-    value_lookup <- setNames(full_annot$cluster, full_annot$cellID)
-    for (nid in unique(tree_$edge[, 1])) {
-        if (nid %in% names(value_lookup)) {
-            tree_$node.label[nid] <- as.character(value_lookup[[as.character(nid)]])
+        value_lookup <- setNames(full_annot$cluster, full_annot$cellID)
+        for (nid in unique(tree_$edge[, 1])) {
+            if (nid %in% names(value_lookup)) {
+                tree_$node.label[nid] <- as.character(value_lookup[[as.character(nid)]])
+            }
         }
-      }
-    lower.bound <- ncells+1
-    tree_$node.label <- tree_$node.label[lower.bound:nrow(full_annot)]
+        lower.bound <- ncells+1
+        tree_$node.label <- tree_$node.label[lower.bound:nrow(full_annot)]
+        nstates <- length(unique(metadata$cluster))
+    } else {
+        if (is.null(tree$node.label)){
+            stop('Internal nodes are not labelled with states. Either simulate a new tree with sim_lin=TRUE or label internal nodes and rerun.')
+        } 
+
+        if (!'states' %in% names(tree)){
+            stop('State labels are not in tree under `states`, add to tree or simulate a new tree with sim_lin=TRUE.')
+        } 
+        nstates <- length(unique(tree$states))
+        metadata <- data.frame(cellID = tree$tip.label, cluster = tree$states)
+        tree_ <- tree
+        test_dataset = NULL
+    }
     
-    nstates <- length(unique(metadata$cluster))
     combos = expand.grid(a, s)
     simulated_res = list('counts' = list(), 'evfs' = list())
     log_message(sprintf('Simulating OU genes for %d parameter combinations.', nrow(combos)), verbose =TRUE)
@@ -220,7 +243,8 @@ simulate_test_data <- function(ngenes, ncells, tree, outdir, out_prefix, a, s, t
 		a_i <- combos[i, 1]
 		s_i <- combos[i, 2]
 
-		OU_sim <- simulate_OU_genes(tree_, metadata, a_i, s_i, t0, theta_step, nstates, nevfs, ngenes , ncells)
+		OU_sim <- simulate_OU_genes(tree_, metadata, a_i, s_i, t0, theta_step, nstates, nevfs, ngenes, ncells,
+            param_mode, signal_gain, burst_scale, scale_s, support_clip)
 
 		simulated_res$counts[[sprintf('a%.2f_s%.2f', a_i, s_i)]] <- OU_sim[['counts']]
 		simulated_res$evfs[[sprintf('a%.2f_s%.2f', a_i, s_i)]] <- OU_sim[['evfs']]
@@ -305,6 +329,13 @@ OUwie.sim.edited <- function(phy=NULL, data=NULL, simmap.tree=FALSE, root.age=NU
             }
         }
     }
+
+    # The simulation loop below walks the edge matrix in order and reads the ancestor's
+    # already-simulated value, so every parent edge has to come before its children. Trees
+    # read from newick are cladewise already, but ones built programmatically (e.g. by
+    # castor::generate_tree_hbd_reverse) need not be -- and on those the root value and the
+    # whole phylogenetic covariance are silently lost.
+    phy <- reorder.phylo(phy, "cladewise")
 
     bt <- branching.times(phy)
     if(is.null(root.age)){

@@ -320,9 +320,15 @@ compute_W_matrix <- function(tree_info, alpha, normalize=FALSE, add.root=TRUE) {
     t_total <- tree_info$leaf_dists[i]
     for (seg in segments) {
       regime_col <- which(regimes == seg$regime)
+      # Without this guard an unmatched regime makes regime_col integer(0), and the
+      # assignment below silently becomes a no-op -- producing a wrong W with no error.
+      if (length(regime_col) != 1){
+        stop(sprintf('Regime `%s` painted on the tree matches %d columns of the weights matrix. Available regimes: %s',
+                     as.character(seg$regime), length(regime_col), paste(regimes, collapse = ', ')))
+      }
       # Contribution from this regime segment
       # e^{-alpha*(t - t_tau)} - e^{-alpha*(t - t_{tau-1})}
-      contrib <- exp(-alpha * (t_total - seg$end_dist)) - 
+      contrib <- exp(-alpha * (t_total - seg$end_dist)) -
                  exp(-alpha * (t_total - seg$start_dist))
       W[i, regime_col] <- W[i, regime_col] + contrib
     }
@@ -348,27 +354,22 @@ compute_VCV<- function(tree_info, alpha, sigma, add.root=TRUE) {
   n <- tree_info$n_leaves
   t <- tree_info$leaf_dists
   s <- tree_info$shared_lengths
-  
-  V <- matrix(0, n, n)
-  for (i in 1:n) {
-    for (j in i:n) {
-      sij <- s[i, j] # shared time 
-      dij <- t[i] + t[j] - 2*sij  # distance for tips i, j to root minus 2*shared time (aka root --> MRCA) 
-      if (i == j & dij != 0 ){stop('Error: distance to self does not equal 0.')}
-      # we are assuming that sigma is already squared. 
-      # Ho and Ane 2014 -- form that conditions on theta0. 
-      if (add.root){
-        val <- (sigma / (2 * alpha)) * exp(-alpha * dij) * (1 - exp(-2 * alpha * sij)) # --> fixed root; like ouwie assume.station = FALSE
-      } else {
-        val <- (sigma / (2 * alpha)) * exp(-alpha * dij) # --> stationary root; like ouwie assume.station = TRUE 
-      }
-      V[i, j] <- val
-      V[j, i] <- val
-    }
-  }
+
+  # dij = distance for tips i, j to root minus 2*shared time (aka root --> MRCA)
+  d <- outer(t, t, "+") - 2*s
+  if (any(diag(d) != 0)){stop('Error: distance to self does not equal 0.')}
+
+  # we are assuming that sigma is already squared.
+  # Ho and Ane 2014 -- form that conditions on theta0.
+  V <- (sigma / (2 * alpha)) * exp(-alpha * d)
+  if (add.root){
+    V <- V * (1 - exp(-2 * alpha * s)) # --> fixed root; like ouwie assume.station = FALSE
+  }                                    # else stationary root; like ouwie assume.station = TRUE
+  dimnames(V) <- NULL
+
   # Add small jitter for numerical stability
-  #V <- V + diag(1e-6, n) # ridge added in Estep. 
-  
+  #V <- V + diag(1e-6, n) # ridge added in Estep.
+
   return(V)
 }
 
@@ -780,13 +781,12 @@ preprocessTree <- function(inputs, reg,
         
     edges <- makeEdges(phy, data, model, k, Tmax.i, int.state, root.age, scaleHeight)
         
+    # Rescale exactly once: map is built from the unscaled tree, then map and edge lengths are
+    # divided by Tmax.i together (edges were already scaled once inside makeEdges).
     map <- getMapFromNode(phy, tip.states, int.states, shift.point)
     if(scaleHeight==TRUE){
-        map <- lapply(map, function(x) x/Tmax.i)
-    }
-        
-    if(scaleHeight==TRUE){
         phy$edge.length <- phy$edge.length/Tmax.i
+        map <- lapply(map, function(x) x/Tmax.i)
         Tmax <- 1
         root.age <- 1
     } else {
@@ -795,15 +795,7 @@ preprocessTree <- function(inputs, reg,
         
     phy$states <- tip.states
 
-    map <- getMapFromNode(phy, tip.states, int.states, shift.point)
-    if(scaleHeight==TRUE){
-        phy$edge.length <- phy$edge.length/Tmax.i
-        map <- lapply(map, function(x) x/Tmax.i)
-        Tmax <- 1
-        root.age <- 1
-    } else {
-        Tmax <- Tmax.i
-    }
+
 
     # legacy parameters for OUwie functions. 
     if (root.fixed == TRUE){
@@ -827,14 +819,7 @@ preprocessTree <- function(inputs, reg,
     unique_regimes <- unique(node_regimes)
     alt.root.state <- if (root.fixed) {'root' } else {phy$node.label[1]}
     mrca_matrix <- mrca(phy)  # matrix of MRCA node indices
-    shared_lengths <- matrix(0, n_leaves, n_leaves)
-    for (i in 1:n_leaves) {
-        for (j in i:n_leaves) {
-          mrca_node <- mrca_matrix[i, j]
-          shared_lengths[i, j] <- root_dists[mrca_node]
-          shared_lengths[j, i] <- shared_lengths[i, j]
-        }
-    }
+    shared_lengths <- matrix(root_dists[mrca_matrix[leaf_indices, leaf_indices]], n_leaves, n_leaves)
 
     alt_weight_mat = list(n_leaves = n_leaves, 
                         regime_paths = regime_paths,
@@ -924,6 +909,7 @@ log_message <- function(message, log_file = NULL, verbose = FALSE) {
   }
 }
 
+#' @export
 infer_anc <- function(phy, mode='ape') {
     if (mode == 'ape'){
         anc_res <- ape::ace(phy$states, 
@@ -1167,7 +1153,7 @@ runSCOUT<- function(idata,
     }
 
     total_time <- 0
-    plan(multisession, workers = cores)
+    future::plan(future::multisession, workers = cores)
 
     start_time <- Sys.time()
             
@@ -1274,7 +1260,7 @@ runSCOUT.batches <- function(idata,
     }
 
     total_time <- 0
-    plan(multisession, workers = cores)
+    future::plan(future::multisession, workers = cores)
 
     start_time <- Sys.time()
             

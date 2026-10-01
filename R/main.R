@@ -23,6 +23,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 	normalize = TRUE, 
 	scale_tree = FALSE, 
 	smoothing_k = NULL, 
+	infer_anc = 'ape', 
 	tau_prior_sd = 0.1,
 	tau_prior_mean=0.2,
 	fixed_root = FALSE, 
@@ -44,7 +45,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 
     # Overcomplicating this but basically, if its 0 or not in the samplesheet then we skip it (make NULL). Otherwise use value. 
     if (!is.null(smoothing_k)) {
-      if (ss[i, 'smoothing_k'] == 0){
+      if (smoothing_k == 0){
         ska <- NULL
       } else {
         ska <- smoothing_k
@@ -74,7 +75,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     idata <- formatSCOUT(tree_path = tree, 
       metadata_path = counts, 
       species_key = species_key, 
-      anc_infer = 'ape', 
+      anc_infer = infer_anc, 
       outpath = results_dir, 
       regimes = regimes,
       normalize = normalize,
@@ -106,8 +107,9 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     if (!'converge' %in% colnames(history)) history$converge <- NA
     history$dataset <- tid
 
-
+  history$ntips <- length(tree$tip.label)
 	annotated <- annotate_history(history, datasetid = 'dataset') %>% 
+    group_by(dataset, gene_name) %>% 
 	    arrange(AICc) %>% 
       mutate(AICc_next_worse = lead(AICc) - AICc) %>% 
 	    arrange(AIC) %>%  

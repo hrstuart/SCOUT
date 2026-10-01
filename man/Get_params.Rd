@@ -2,29 +2,31 @@
 % Please edit documentation in R/sim_utilities.R
 \name{Get_params}
 \alias{Get_params}
-\title{Getting the parameters for simulating gene expression from EVf and gene effects}
+\title{Kinetic parameters from EVFs and gene effects.}
 \usage{
-Get_params(gene_effects, evf, match_param_den, bimod, scale_s)
+Get_params(
+  gene_effects,
+  evf,
+  match_param_den,
+  bimod,
+  scale_s,
+  param_mode = c("rank", "affine"),
+  signal_gain = c(NA, NA, 0.3),
+  burst_scale = 1
+)
 }
 \arguments{
-\item{gene_effects}{a list of three matrices (generated using the GeneEffects function), 
-each corresponding to one kinetic parameter. Each matrix has nevf columns, and ngenes rows.}
+\item{param_mode}{'rank' (original SymSim behaviour) or 'affine'.}
 
-\item{evf}{a vector of length nevf, the cell specific extrinsic variation factor}
+\item{signal_gain}{length-3 over c(kon, koff, s): per-gene dynamic range in log10 units. NA leaves
+that parameter on the rank transform. Only used when param_mode = 'affine'.}
 
-\item{match_param_den}{the fitted parameter distribution density to sample from}
-
-\item{bimod}{the bimodality constant}
-
-\item{scale_s}{a factor to scale the s parameter, which is used to tune the size of the actual cell (small cells have less number of transcripts in total)}
+\item{burst_scale}{multiplies kon and koff. Beta mean kon/(kon+koff) is unchanged, variance falls
+~1/burst_scale. 1 is the calibrated SymSim setting.}
 }
 \value{
-params a matrix of ngenes * 3
+list of three ngenes x ncells matrices: kon, koff, s.
 }
 \description{
-This function takes gene_effect and EVF, take their dot product and scale the product to the correct range 
-by using first a logistic function and then adding/dividing by constant to their correct range
-}
-\examples{
-Get_params()
+Kinetic parameters from EVFs and gene effects.
 }

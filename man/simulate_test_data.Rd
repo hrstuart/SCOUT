@@ -14,7 +14,12 @@ simulate_test_data(
   s,
   t0,
   theta_step,
-  nevfs = 20
+  nevfs = 20,
+  sim_lin = TRUE,
+  param_mode = "rank",
+  signal_gain = c(NA, NA, 0.3),
+  burst_scale = 1,
+  scale_s = 10
 )
 }
 \arguments{
@@ -37,6 +42,14 @@ simulate_test_data(
 \item{theta_step}{Integer: Used to generate optimal values depending on the model.}
 
 \item{nevfs}{Integer: Number of EVFs to generate.}
+
+\item{param_mode}{Character: Either rank or affine. Controls whether OU-trait scale is preseved when moving to counts.}
+
+\item{signal_gain}{List: Default c(NA,NA,0.3). Controls the how much to scale the variance of an OU process before converting to counts.}
+
+\item{burst_scale}{Integer: Default = 1. Controls level of transcriptional bursting.}
+
+\item{scale_s}{Integer: Default = 10. Controls the rate of synthesis.}
 }
 \value{
 List of results. The same set are also saved to outdir.
