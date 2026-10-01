@@ -45,7 +45,7 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 
     # Overcomplicating this but basically, if its 0 or not in the samplesheet then we skip it (make NULL). Otherwise use value. 
     if (!is.null(smoothing_k)) {
-      if (ss[i, 'smoothing_k'] == 0){
+      if (smoothing_k == 0){
         ska <- NULL
       } else {
         ska <- smoothing_k
