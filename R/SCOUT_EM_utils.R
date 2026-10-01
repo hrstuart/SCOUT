@@ -992,15 +992,15 @@ formatSCOUT <- function(tree_path, metadata_path, outpath,
     gene_cols <- intersect(gene_cols, colnames(meta))
     ngenes <- length(gene_cols)
     log_message(paste0(ngenes, ' genes were detected. '), log_file=logfile, verbose=TRUE)
-    meta[, gene_cols] <- apply(meta[, gene_cols], 2, as.numeric)
+    meta[gene_cols] <- lapply(meta[gene_cols], as.numeric)  # lapply, not apply: survives one gene
     rownames(meta) <- meta$species
 
     # Check for all zeros columns 
     meta <- as.data.frame(meta)
-    sum_zero_genes <- gene_cols[colSums(meta[, gene_cols]) == 0]
+    sum_zero_genes <- gene_cols[colSums(meta[, gene_cols, drop = FALSE]) == 0]
     if (length(sum_zero_genes) > 0) {
         log_message(paste0('Removing ', length(sum_zero_genes), ' from the dataset which have column sumns of zero.'), log_file=logfile, verbose=TRUE)
-        gene_cols <- gene_cols[colSums(meta[, gene_cols]) != 0]
+        gene_cols <- gene_cols[colSums(meta[, gene_cols, drop = FALSE]) != 0]
     }
 
     ################### Tree Preprocessing ###################

@@ -25,7 +25,12 @@ Imports:
     future,
     future.apply,
     progressr,
-    stringr
+    stringr,
+    rlang,
+    stats,
+    utils,
+    graphics
 Suggests:
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    phytools
 RoxygenNote: 7.3.2
