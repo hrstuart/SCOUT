@@ -59,8 +59,10 @@ annotate_history <- function(dataset1, datasetid){
                AICc_next_worse = lead(AICc) - AICc,
                AIC_next_worse = lead(AIC) - AIC,
                best_fit = ifelse(delta_AIC == 0, TRUE, FALSE)) %>% 
-               ungroup() %>% select(-c(delta_AIC, delta_AICc)) %>% 
-        mutate(truth = str_extract(gene_name, 'BM1|OU1|OUM'))
+               ungroup() %>% 
+        # delta_AIC is kept: SCOUT() selects on delta_AIC == 0 (main.R).
+        # OU\\d+ (not OU1) so multi-regime truths like OU4 are labelled, and OU12 is not read as OU1.
+        mutate(truth = str_extract(gene_name, 'BM1|OUM|OU\\d+'))
 
     return(dataset2)
 }

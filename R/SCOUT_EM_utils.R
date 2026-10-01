@@ -781,19 +781,8 @@ preprocessTree <- function(inputs, reg,
         
     edges <- makeEdges(phy, data, model, k, Tmax.i, int.state, root.age, scaleHeight)
         
-    #map <- getMapFromNode(phy, tip.states, int.states, shift.point)
-    #if(scaleHeight==TRUE){
-    #    map <- lapply(map, function(x) x/Tmax.i)
-    #}
-        
-    #if(scaleHeight==TRUE){
-    #    phy$edge.length <- phy$edge.length/Tmax.i
-    #    Tmax <- 1
-    #    root.age <- 1
-    #} else {
-    #    Tmax <- Tmax.i
-    #}
-
+    # Rescale exactly once: map is built from the unscaled tree, then map and edge lengths are
+    # divided by Tmax.i together (edges were already scaled once inside makeEdges).
     map <- getMapFromNode(phy, tip.states, int.states, shift.point)
     if(scaleHeight==TRUE){
         phy$edge.length <- phy$edge.length/Tmax.i
