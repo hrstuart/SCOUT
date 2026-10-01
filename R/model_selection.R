@@ -19,6 +19,129 @@
 # lrt_status: 'not tested' (BM1 best), 'not eligible' (OU1 best; no valid LRT vs BM1),
 #             'tested: significant' / 'tested: not significant' (multi-regime winner vs OU1).
 # The statistics use SCOUT's unpenalized ll_total at penalized estimates: report as non-standard.
+#
+# Speed: the per-gene decision (hybrid_decide) works on plain vectors and returns a plain list.
+# Building a one-row tibble per gene cost ~4 ms and dominated whole-genome runs; the bulk paths
+# (run_hybrid_pipeline, scout_model_selection) assemble each output column once instead.
+
+#' Resolve select_model_hybrid() options (match.arg and defaults) once per call.
+#' @noRd
+hybrid_args <- function(ic          = c("AICc", "AIC"),
+                        on_fail     = c("fallback", "ambiguous"),
+                        alpha       = 0.05,
+                        correction  = c("bonferroni", "none"),
+                        bm_regime   = "BM1",
+                        ou_regime   = "OU1",
+                        loglik_col  = "ll_total",
+                        npar_col    = "param.count",
+                        ntips_col   = "ntips") {
+  list(ic = match.arg(ic), on_fail = match.arg(on_fail), alpha = alpha,
+       correction = match.arg(correction), bm_regime = bm_regime, ou_regime = ou_regime,
+       loglik_col = loglik_col, npar_col = npar_col, ntips_col = ntips_col)
+}
+
+#' The hybrid decision for one gene's candidate set, as a plain list (one element per output
+#' column of select_model_hybrid()). `reg`, `ll`, `k` are per-regime vectors, `n` the tip count.
+#' @noRd
+hybrid_decide <- function(reg, ll, k, n, a) {
+  if (anyDuplicated(reg)) {
+    stop("More than one row per regime (e.g. several EM iterations); keep the last iter per regime first.")
+  }
+  for (r in c(a$bm_regime, a$ou_regime)) {
+    if (!r %in% reg) stop(sprintf("No '%s' row for this gene.", r))
+  }
+  bm <- a$bm_regime; ou <- a$ou_regime; ic <- a$ic
+
+  crit <- if (ic == "AIC") -2 * ll + 2 * k else -2 * ll + 2 * k * n / (n - k - 1)
+  names(crit) <- names(ll) <- names(k) <- reg
+
+  n_multi <- sum(!reg %in% c(bm, ou))
+  winner  <- reg[which.min(crit)]
+  simple  <- if (crit[bm] <= crit[ou]) bm else ou
+
+  out <- list(
+    ic                = ic,
+    ic_winner         = winner,
+    best_simple       = simple,
+    delta_ic_simple   = unname(crit[simple] - min(crit)),   # >0: winner beats best of BM1/OU1
+    n_multi           = n_multi,
+    lrt_alt           = NA_character_,
+    lrt_null          = NA_character_,
+    lrt_statistic     = NA_real_,
+    lrt_statistic_raw = NA_real_,
+    lrt_df            = NA_integer_,
+    lrt_p_value       = NA_real_,
+    lrt_p_corrected   = NA_real_,
+    call              = winner,
+    lrt_status        = NA_character_,
+    flag              = ""
+  )
+
+  # BM1 / OU1 winners: the IC decision stands, with the reason no LRT was run
+  if (winner == bm) {
+    out$lrt_status <- "not tested"
+    out$flag       <- sprintf("%s best by %s; simplest candidate, no null to test against", bm, ic)
+    return(out)
+  }
+  if (winner == ou) {
+    out$lrt_status <- "not eligible"
+    out$flag       <- sprintf("%s best by %s; LRT vs %s not valid (not nested under SCOUT's alpha penalty)",
+                              ou, ic, bm)
+    return(out)
+  }
+
+  raw  <- 2 * (ll[[winner]] - ll[[ou]])
+  stat <- max(raw, 0)
+  df   <- as.integer(k[[winner]] - k[[ou]])
+  if (df <= 0) stop(sprintf("'%s' does not have more parameters than '%s'.", winner, ou))
+  p    <- stats::pchisq(stat, df = df, lower.tail = FALSE)
+  pc   <- if (a$correction == "bonferroni") min(1, p * n_multi) else p
+
+  out$lrt_alt           <- winner
+  out$lrt_null          <- ou
+  out$lrt_statistic     <- stat
+  out$lrt_statistic_raw <- raw
+  out$lrt_df            <- df
+  out$lrt_p_value       <- p
+  out$lrt_p_corrected   <- pc
+  out$lrt_status        <- if (pc < a$alpha) "tested: significant" else "tested: not significant"
+  flags <- character(0)
+  if (raw < 0) flags <- c(flags, "negative LR clipped to 0")
+  if (pc >= a$alpha) {
+    out$call <- if (a$on_fail == "fallback") simple else "ambiguous"
+    flags    <- c(flags, sprintf("%s not significant vs %s", winner, ou))
+  }
+  out$flag <- paste(flags, collapse = "; ")
+  out
+}
+
+#' Keep the last `iter_col` row per `cols` group, as
+#' group_by(cols) |> slice_max(iter, n = 1, with_ties = FALSE) |> ungroup() does -- same rows, same
+#' order (groups sorted, strings in C-locale order; ties keep the earlier row) -- in one radix sort
+#' instead of a per-group evaluation, which took ~30 s on 150k groups.
+#' @noRd
+last_iter_rows <- function(df, cols, iter_col) {
+  o <- do.call(order, c(unname(as.list(df[cols])), list(df[[iter_col]]),
+                        list(decreasing = c(rep(FALSE, length(cols)), TRUE), method = "radix")))
+  keep <- o[!duplicated(df[o, cols, drop = FALSE])]
+  out <- df[keep, , drop = FALSE]
+  if (!inherits(out, "tbl_df")) rownames(out) <- NULL
+  out
+}
+
+#' Column template for hybrid_decide() results (names and types), for vapply.
+#' @noRd
+HYBRID_TEMPLATE <- list(ic = "", ic_winner = "", best_simple = "", delta_ic_simple = 0,
+                        n_multi = 0L, lrt_alt = "", lrt_null = "", lrt_statistic = 0,
+                        lrt_statistic_raw = 0, lrt_df = 0L, lrt_p_value = 0,
+                        lrt_p_corrected = 0, call = "", lrt_status = "", flag = "")
+
+#' Turn a list of per-row named lists into a list of columns, one vapply per column.
+#' @noRd
+rows_to_columns <- function(rows, template) {
+  lapply(stats::setNames(names(template), names(template)), function(cn)
+    vapply(rows, function(r) r[[cn]], template[[cn]], USE.NAMES = FALSE))
+}
 
 #' Hybrid IC + LRT model selection for one gene
 #'
@@ -48,83 +171,10 @@ select_model_hybrid <- function(gene_df,
                                 loglik_col  = "ll_total",
                                 npar_col    = "param.count",
                                 ntips_col   = "ntips") {
-  ic         <- match.arg(ic)
-  on_fail    <- match.arg(on_fail)
-  correction <- match.arg(correction)
-
-  reg <- as.character(gene_df[[regime_col]])
-  if (anyDuplicated(reg)) {
-    stop("More than one row per regime (e.g. several EM iterations); keep the last iter per regime first.")
-  }
-  for (r in c(bm_regime, ou_regime)) {
-    if (!r %in% reg) stop(sprintf("No '%s' row for this gene.", r))
-  }
-
-  ll <- gene_df[[loglik_col]]
-  k  <- gene_df[[npar_col]]
-  n  <- gene_df[[ntips_col]][1]
-  crit <- if (ic == "AIC") -2 * ll + 2 * k else -2 * ll + 2 * k * n / (n - k - 1)
-  names(crit) <- names(ll) <- names(k) <- reg
-
-  is_multi <- !reg %in% c(bm_regime, ou_regime)
-  n_multi  <- sum(is_multi)
-  winner   <- reg[which.min(crit)]
-  simple   <- if (crit[bm_regime] <= crit[ou_regime]) bm_regime else ou_regime
-
-  out <- dplyr::tibble(
-    ic                = ic,
-    ic_winner         = winner,
-    best_simple       = simple,
-    delta_ic_simple   = unname(crit[simple] - min(crit)),   # >0: winner beats best of BM1/OU1
-    n_multi           = n_multi,
-    lrt_alt           = NA_character_,
-    lrt_null          = NA_character_,
-    lrt_statistic     = NA_real_,
-    lrt_statistic_raw = NA_real_,
-    lrt_df            = NA_integer_,
-    lrt_p_value       = NA_real_,
-    lrt_p_corrected   = NA_real_,
-    call              = winner,
-    lrt_status        = NA_character_,
-    flag              = ""
-  )
-
-  # BM1 / OU1 winners: the IC decision stands, with the reason no LRT was run
-  if (winner == bm_regime) {
-    out$lrt_status <- "not tested"
-    out$flag       <- sprintf("%s best by %s; simplest candidate, no null to test against", bm_regime, ic)
-    return(out)
-  }
-  if (winner == ou_regime) {
-    out$lrt_status <- "not eligible"
-    out$flag       <- sprintf("%s best by %s; LRT vs %s not valid (not nested under SCOUT's alpha penalty)",
-                              ou_regime, ic, bm_regime)
-    return(out)
-  }
-
-  raw  <- 2 * (ll[[winner]] - ll[[ou_regime]])
-  stat <- max(raw, 0)
-  df   <- as.integer(k[[winner]] - k[[ou_regime]])
-  if (df <= 0) stop(sprintf("'%s' does not have more parameters than '%s'.", winner, ou_regime))
-  p    <- stats::pchisq(stat, df = df, lower.tail = FALSE)
-  pc   <- if (correction == "bonferroni") min(1, p * n_multi) else p
-
-  out$lrt_alt           <- winner
-  out$lrt_null          <- ou_regime
-  out$lrt_statistic     <- stat
-  out$lrt_statistic_raw <- raw
-  out$lrt_df            <- df
-  out$lrt_p_value       <- p
-  out$lrt_p_corrected   <- pc
-  out$lrt_status        <- if (pc < alpha) "tested: significant" else "tested: not significant"
-  flags <- character(0)
-  if (raw < 0) flags <- c(flags, "negative LR clipped to 0")
-  if (pc >= alpha) {
-    out$call <- if (on_fail == "fallback") simple else "ambiguous"
-    flags    <- c(flags, sprintf("%s not significant vs %s", winner, ou_regime))
-  }
-  out$flag <- paste(flags, collapse = "; ")
-  out
+  a <- hybrid_args(ic, on_fail, alpha, correction, bm_regime, ou_regime,
+                   loglik_col, npar_col, ntips_col)
+  dplyr::as_tibble(hybrid_decide(as.character(gene_df[[regime_col]]), gene_df[[loglik_col]],
+                                 gene_df[[npar_col]], gene_df[[ntips_col]][1], a))
 }
 
 #' Hybrid IC + LRT model selection across genes
@@ -153,17 +203,16 @@ run_hybrid_pipeline <- function(df, group_vars = c("dataset", "gene_name"), iter
   df <- df %>% dplyr::ungroup() %>% dplyr::select(-dplyr::any_of(c("X", "...1")))  # write.csv row-name column
   missing <- setdiff(c(group_vars, regime_col), names(df))
   if (length(missing)) stop("Missing columns: ", paste(missing, collapse = ", "))
-  if (iter_col %in% names(df)) {
-    df <- df %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(c(group_vars, regime_col)))) %>%
-      dplyr::slice_max(.data[[iter_col]], n = 1, with_ties = FALSE) %>%
-      dplyr::ungroup()
-  }
+  if (iter_col %in% names(df)) df <- last_iter_rows(df, c(group_vars, regime_col), iter_col)
 
-  args <- list(...)
-  res  <- df %>%
-    dplyr::group_by(dplyr::across(dplyr::all_of(group_vars))) %>%
-    dplyr::reframe(select_model_hybrid(dplyr::pick(dplyr::everything()), regime_col = regime_col, ...))
+  a  <- do.call(hybrid_args, list(...))
+  gd <- dplyr::group_by(df, dplyr::across(dplyr::all_of(group_vars)))
+  idx <- dplyr::group_rows(gd)                                   # dplyr's group order
+  reg <- as.character(df[[regime_col]]); ll <- df[[a$loglik_col]]
+  k   <- df[[a$npar_col]];               n  <- df[[a$ntips_col]]
+  rows <- lapply(idx, function(i) hybrid_decide(reg[i], ll[i], k[i], n[i][1], a))
+  res  <- dplyr::bind_cols(dplyr::group_keys(gd),
+                           dplyr::as_tibble(rows_to_columns(rows, HYBRID_TEMPLATE)))
 
   res$decided_on <- ifelse(is.na(res$lrt_p_corrected), "IC", "per-gene p")
   if (is.null(fdr_method)) return(res)
@@ -171,12 +220,10 @@ run_hybrid_pipeline <- function(df, group_vars = c("dataset", "gene_name"), iter
 
   if (call_on_fdr) {
     # flag keeps the per-gene verdict; decided_on marks calls re-made on the FDR-adjusted p
-    a       <- if (is.null(args$alpha)) 0.05 else args$alpha
-    on_fail <- if (is.null(args$on_fail)) "fallback" else match.arg(args$on_fail, c("fallback", "ambiguous"))
-    tested  <- !is.na(res$lrt_p_fdr)
-    res$call[tested] <- ifelse(res$lrt_p_fdr[tested] < a, res$ic_winner[tested],
-                               if (on_fail == "fallback") res$best_simple[tested] else "ambiguous")
-    res$lrt_status[tested] <- ifelse(res$lrt_p_fdr[tested] < a, "tested: significant", "tested: not significant")
+    tested <- !is.na(res$lrt_p_fdr)
+    res$call[tested] <- ifelse(res$lrt_p_fdr[tested] < a$alpha, res$ic_winner[tested],
+                               if (a$on_fail == "fallback") res$best_simple[tested] else "ambiguous")
+    res$lrt_status[tested] <- ifelse(res$lrt_p_fdr[tested] < a$alpha, "tested: significant", "tested: not significant")
     res$decided_on[tested] <- paste0("FDR p (", fdr_method, ")")
   }
   res
@@ -283,10 +330,7 @@ scout_model_selection <- function(history,
   if (!"converge" %in% names(df)) df$converge <- NA_character_
   if (!"model" %in% names(df)) df$model <- df[[regime_col]]
   if (iter_col %in% names(df)) {
-    df <- df %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(c(group_vars, regime_col)))) %>%
-      dplyr::slice_max(.data[[iter_col]], n = 1, with_ties = FALSE) %>%
-      dplyr::ungroup() %>% as.data.frame()
+    df <- last_iter_rows(df, c(group_vars, regime_col), iter_col)
   } else {
     df[[iter_col]] <- NA_integer_
   }
@@ -295,31 +339,64 @@ scout_model_selection <- function(history,
   if (hybrid && !all(c("BM1", "OU1") %in% candidates)) {
     stop("hybrid = TRUE needs BM1 and OU1 among the fitted regimes; use hybrid = FALSE.")
   }
+  a <- hybrid_args(ic = ic, on_fail = hybrid_on_fail, alpha = hybrid_alpha,
+                   correction = hybrid_correction)
 
   par_list <- read_scout_params(params)
   if (!is.null(par_list) && "dataset" %in% names(df) && length(unique(df$dataset)) > 1) {
     stop("`params` can only be matched to a history with a single dataset.")
   }
   theta_cols <- unique(unlist(lapply(par_list, function(p) grep("^theta_", names(p), value = TRUE))))
+  # theta lookup: regime -> theta column -> value by gene (first row per gene, as before)
+  theta_lut <- lapply(par_list, function(p) {
+    first <- !duplicated(as.character(p$gene_name))
+    lapply(stats::setNames(intersect(theta_cols, names(p)), intersect(theta_cols, names(p))),
+           function(tc) stats::setNames(p[[tc]][first], as.character(p$gene_name)[first]))
+  })
+
+  # Column vectors, indexed per gene below -- no per-gene data.frame subsetting.
+  reg_all   <- as.character(df[[regime_col]])
+  ll_all    <- df$ll_total
+  k_all     <- df$param.count
+  n_all     <- df$ntips
+  conv_all  <- as.character(df$converge)
+  it_all    <- df[[iter_col]]
+  model_all <- as.character(df$model)
+  gene_all  <- as.character(df$gene_name)
+  alpha_all <- if ("alpha" %in% names(df)) df$alpha else NULL
+  sigma_all <- if ("sigma" %in% names(df)) df$sigma else NULL
+  tau_all   <- if ("tau" %in% names(df)) df$tau else NULL
 
   not_conv <- function(cv) is.na(cv) | cv != "converged"
   hit_cap  <- function(cv, it) is.na(cv) & !is.na(it) & it >= max_iter
   oscill   <- function(cv) !is.na(cv) & cv == "early_stop_oscillating"
 
-  one_gene <- function(g) {
-    reg <- as.character(g[[regime_col]])
-    ll  <- g$ll_total; k <- g$param.count; n <- g$ntips[1]
+  ic_col <- ic; w_col <- paste0(ic, "_weight"); d_col <- paste0("delta_", ic, "_next")
+  hyb_cols <- c("ic_winner", "lrt_status", "lrt_alt", "lrt_statistic", "lrt_df",
+                "lrt_p_value", "lrt_p_corrected")
+  # Output columns after the group variables, in order, with their NA of the right type.
+  template <- c(
+    list(selected_regime = NA_character_, selected_model = NA_character_,
+         next_best_regime = NA_character_),
+    stats::setNames(list(NA_real_, NA_real_, NA_real_), c(ic_col, w_col, d_col)),
+    list(ll_total = ll_all[NA_integer_][1], param.count = k_all[NA_integer_][1],
+         ntips = n_all[NA_integer_][1], alpha = NA_real_, sigma = NA_real_, tau = NA_real_),
+    stats::setNames(rep(list(NA_real_), length(theta_cols)), theta_cols),
+    list(iter = it_all[NA_integer_][1], converge = NA_character_,
+         n_candidates_not_converged = NA_integer_),
+    if (hybrid) list(ic_winner = NA_character_, lrt_status = NA_character_,
+                     lrt_alt = NA_character_, lrt_statistic = NA_real_, lrt_df = NA_integer_,
+                     lrt_p_value = NA_real_, lrt_p_corrected = NA_real_),
+    stats::setNames(rep(list(FALSE), length(all_flags)), paste0("flag_", all_flags)))
+
+  one_gene <- function(ix) {
+    row <- template
+    reg <- reg_all[ix]; ll <- ll_all[ix]; k <- k_all[ix]; n <- n_all[ix][1]
     crit <- if (ic == "AIC") -2 * ll + 2 * k else -2 * ll + 2 * k * n / (n - k - 1)
     names(crit) <- reg
     ok <- is.finite(crit)
-    missing_fit <- !all(candidates %in% reg[ok])
-
-    row <- g[1, group_vars, drop = FALSE]
-    if (!any(ok)) {
-      row$selected_regime <- NA_character_
-      row$flag_missing_fit <- TRUE
-      return(row)
-    }
+    row$flag_missing_fit <- !all(candidates %in% reg[ok])
+    if (!any(ok)) return(row)                                # no usable fit: all NA, flagged
     w <- rep(NA_real_, length(crit))
     d <- crit[ok] - min(crit[ok])
     w[ok] <- exp(-0.5 * d) / sum(exp(-0.5 * d))
@@ -328,11 +405,8 @@ scout_model_selection <- function(history,
     hyb <- NULL
     selected <- ic_winner
     if (hybrid) {
-      hyb <- tryCatch(
-        select_model_hybrid(g[ok, , drop = FALSE], ic = ic, on_fail = hybrid_on_fail,
-                            alpha = hybrid_alpha, correction = hybrid_correction,
-                            regime_col = regime_col),
-        error = function(e) NULL)
+      hyb <- tryCatch(hybrid_decide(reg[ok], ll[ok], k[ok], n_all[ix[ok]][1], a),
+                      error = function(e) NULL)
       if (!is.null(hyb)) selected <- hyb$call
     }
     ambiguous <- identical(selected, "ambiguous")
@@ -340,57 +414,59 @@ scout_model_selection <- function(history,
     i <- which(reg == shown)
     others <- ok & reg != shown
     nb <- if (any(others)) reg[others][which.min(crit[others])] else NA_character_
+    j <- ix[i]                                               # row of the reported fit
+    mdl <- model_all[j]
 
     row$selected_regime  <- selected
-    row$selected_model   <- if (ambiguous) NA_character_ else as.character(g$model[i])
+    row$selected_model   <- if (ambiguous) NA_character_ else mdl
     row$next_best_regime <- nb
-    row[[ic]]                            <- unname(crit[i])
-    row[[paste0(ic, "_weight")]]         <- w[i]
-    row[[paste0("delta_", ic, "_next")]] <- if (is.na(nb)) NA_real_ else unname(crit[nb] - crit[i])
+    row[[ic_col]] <- unname(crit[i])
+    row[[w_col]]  <- w[i]
+    row[[d_col]]  <- if (is.na(nb)) NA_real_ else unname(crit[nb] - crit[i])
     row$ll_total    <- ll[i]
     row$param.count <- k[i]
     row$ntips       <- n
-    row$alpha <- if (as.character(g$model[i]) == "BM1" || !"alpha" %in% names(g)) NA_real_ else g$alpha[i]
-    row$sigma <- if ("sigma" %in% names(g)) g$sigma[i] else NA_real_
-    row$tau   <- if ("tau" %in% names(g)) g$tau[i] else NA_real_
-    for (tc in theta_cols) {
-      p <- par_list[[shown]]
-      row[[tc]] <- if (!is.null(p) && tc %in% names(p)) {
-        v <- p[[tc]][as.character(p$gene_name) == as.character(g$gene_name[1])]
-        if (length(v)) v[1] else NA_real_
-      } else NA_real_
+    row$alpha <- if (mdl == "BM1" || is.null(alpha_all)) NA_real_ else alpha_all[j]
+    row$sigma <- if (is.null(sigma_all)) NA_real_ else sigma_all[j]
+    row$tau   <- if (is.null(tau_all)) NA_real_ else tau_all[j]
+    if (length(theta_cols)) {
+      lut <- theta_lut[[shown]]
+      for (tc in names(lut)) {
+        v <- lut[[tc]][gene_all[ix[1]]]
+        if (!is.na(names(v))) row[[tc]] <- unname(v)
+      }
     }
-    row$iter     <- g[[iter_col]][i]
-    row$converge <- as.character(g$converge[i])
-    row$n_candidates_not_converged <- sum(not_conv(g$converge))
+    row$iter     <- it_all[j]
+    row$converge <- conv_all[j]
+    row$n_candidates_not_converged <- sum(not_conv(conv_all[ix]))
 
     if (!is.null(hyb)) {
-      row$ic_winner <- hyb$ic_winner
-      for (cc in c("lrt_status", "lrt_alt", "lrt_statistic", "lrt_df", "lrt_p_value", "lrt_p_corrected")) {
-        row[[cc]] <- hyb[[cc]]
-      }
+      for (cc in hyb_cols) row[[cc]] <- hyb[[cc]]
     } else if (hybrid) {
       row$ic_winner  <- ic_winner
       row$lrt_status <- "hybrid failed"
     }
 
-    scope <- if (flag_scope == "all") seq_along(reg) else i
-    cv <- as.character(g$converge[scope]); it <- g[[iter_col]][scope]
+    sc <- if (flag_scope == "all") ix else j
+    cv <- conv_all[sc]; it <- it_all[sc]
     row$flag_not_converged <- check_convergence && any(not_conv(cv))
     row$flag_max_iter      <- check_convergence && any(hit_cap(cv, it))
     row$flag_oscillating   <- check_convergence && any(oscill(cv))
     row$flag_ambiguous     <- ambiguous
-    row$flag_missing_fit   <- missing_fit
     row
   }
 
+  # Same grouping and group order as before: one split of row indices, not of the data.frame.
   keys <- interaction(df[group_vars], drop = TRUE, lex.order = TRUE)
-  out  <- dplyr::bind_rows(lapply(split(df, keys), one_gene))
-  for (f in paste0("flag_", all_flags)) {
-    if (!f %in% names(out)) out[[f]] <- FALSE
-    out[[f]][is.na(out[[f]])] <- FALSE
-  }
-  if (hybrid && "lrt_p_corrected" %in% names(out) && !is.null(fdr_method)) {
+  idx  <- split(seq_len(nrow(df)), keys)
+  rows <- lapply(idx, one_gene)
+  first <- vapply(idx, `[`, 1L, 1L, USE.NAMES = FALSE)
+  out <- df[first, group_vars, drop = FALSE]
+  cols <- lapply(stats::setNames(names(template), names(template)), function(cn)
+    unlist(lapply(rows, `[[`, cn), use.names = FALSE))
+  for (cn in names(cols)) out[[cn]] <- cols[[cn]]
+
+  if (hybrid && !is.null(fdr_method)) {
     out$lrt_p_fdr <- stats::p.adjust(out$lrt_p_corrected, method = fdr_method)
   }
   flag_mat <- as.matrix(out[, paste0("flag_", exclude), drop = FALSE])

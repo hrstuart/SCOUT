@@ -178,3 +178,20 @@ test_that('theta columns come from params, as a list or as SCOUT parameter files
     r$dataset[r$gene_name == 'g2'] <- 'd2'
     expect_error(scout_model_selection(r, params = pars, hybrid = FALSE), 'single dataset')
 })
+
+test_that('last_iter_rows matches group_by + slice_max (order, ties, NA, C-locale strings)', {
+    set.seed(5)
+    d <- data.frame(dataset   = sample(c('b', 'a', 'B'), 300, TRUE),
+                    gene_name = sample(c('somi.1', 'D1086.12', 'abc-1', 'Abc.2', '_x'), 300, TRUE),
+                    regime    = sample(c('OUl', 'BM1', 'OUalt', 'OU1'), 300, TRUE),
+                    iter      = sample(c(1:4, NA), 300, TRUE),
+                    val       = seq_len(300), stringsAsFactors = FALSE)
+    cols <- c('dataset', 'gene_name', 'regime')
+    ref <- d %>% dplyr::group_by(dplyr::across(dplyr::all_of(cols))) %>%
+        dplyr::slice_max(iter, n = 1, with_ties = FALSE) %>% dplyr::ungroup() %>% as.data.frame()
+    expect_identical(SCOUT:::last_iter_rows(d, cols, 'iter'), ref)
+    tb <- dplyr::as_tibble(d)
+    ref_tb <- tb %>% dplyr::group_by(dplyr::across(dplyr::all_of(cols))) %>%
+        dplyr::slice_max(iter, n = 1, with_ties = FALSE) %>% dplyr::ungroup()
+    expect_identical(SCOUT:::last_iter_rows(tb, cols, 'iter'), ref_tb)
+})
