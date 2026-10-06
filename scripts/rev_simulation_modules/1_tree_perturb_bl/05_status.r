@@ -1,27 +1,9 @@
-# Status tracker for the branch-length baseline run (1_tree_perturb_bl).
-#
-# THE CSV IS A REPORT, NOT THE SOURCE OF TRUTH.
-# Task state is derived from files on disk: the jobs manifest says what SHOULD exist, the output
-# CSVs say what DOES (via task_complete(), reused verbatim from scout_task_paths.R), and the claim
-# files written by run_one.sh say who is working on what right now. Delete this CSV and the next
-# refresh rebuilds it exactly. That is what makes `resume` correct after any crash -- including one
-# that loses every claim file and the status CSV itself.
-#
-# CONCURRENCY. Several R processes run at once under xargs -P; multiple writers on one CSV would
-# interleave and corrupt it. Each task writes only its OWN claim file (one writer per file, written
-# tmp-then-mv by run_one.sh), and this tracker is the ONLY writer of the status CSV -- also
-# tmp-then-rename, so a reader never catches a half-written file.
-#
-# This exists rather than reusing scripts/status_tracker.r because that script resolves paths
-# through task_dir()/task_stems(), which have no notion of alpha. See bl_paths.R for why this run
-# carries its own resolvers instead of editing a file the published runs depend on.
+# 05_status.r -- status tracker for the branch-length baseline run. Rebuilds the status CSV from
+# files on disk (manifest, output CSVs, claim files), so it is safe to delete and re-run.
 #
 # Usage:
-#   Rscript 05_status.r                                    # one refresh, print the rollup
-#   SCOUT_TRACK_INTERVAL=60 Rscript 05_status.r loop        # refresh until told to stop
-#
-# Deliberately does NOT source scout_perturb_lib.R: its library(SCOUT) costs ~2m35s over DARTFS,
-# which would make a 60s refresh loop impossible.
+#   Rscript 05_status.r                                  # one refresh, print the rollup
+#   SCOUT_TRACK_INTERVAL=60 Rscript 05_status.r loop      # refresh until told to stop
 
 ROOT <- Sys.getenv('SCOUT_ROOT',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/1_tree_robustness')

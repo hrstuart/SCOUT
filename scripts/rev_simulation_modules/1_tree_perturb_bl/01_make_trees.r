@@ -1,48 +1,9 @@
-# Goal 1 on a BRANCH-LENGTH baseline (1_tree_perturb_bl) step 01:
-# generate every perturbed tree up front and write a manifest.
+# 01_make_trees.r -- Goal 1, branch-length baseline, step 01: generate every perturbed tree
+# (shuffle @ 100%, nni and collapse @ 10/50/90%) and write a manifest. Seeds and perturbed edges
+# match the published unit-branch-length run, so the two pair replicate-by-replicate.
 #
-# Same three arms as the published run:
-#   shuffle  @ 100%          -- permutes every tip label. No gradient: a full permutation is
-#                               saturated by definition, and this is the no-signal floor the other
-#                               arms are read against.
-#   nni      @ 10/50/90%     -- topology error with branch lengths preserved.
-#   collapse @ 10/50/90%     -- internal edges deleted, so topology AND root-to-tip path lengths
-#                               change. On THIS tree that second effect is real; on the published
-#                               unit-branch-length tree every path length was just an edge count.
-#
-# The coarse intensity grid is deliberate. The published sweep measured 1%, 5%, 10% and 25% as
-# statistically indistinguishable (counts 0.823/0.824/0.822/0.819), so fine low-intensity resolution
-# buys nothing. 10/50/90 brackets the range instead. The FULL v2 grid is still in SEED_RANK below,
-# so restoring any intensity is one env var and keeps its original seed.
-#
-# ---------------------------------------------------------------------------------------------
-# EDGE-MATCHING TO THE PUBLISHED RUN -- the reason this script is not just a copy with new paths.
-#
-# The baseline here has the SAME topology and tip states as the published unit-branch-length tree;
-# only the branch lengths differ. Every perturbation is driven purely by the RNG -- perturb_nni
-# calls phangorn::rNNI(moves = k), perturb_collapse samples internal EDGE INDICES, perturb_shuffle
-# samples TIP INDICES -- and none of them consults a branch length. So with the same seed and the
-# same topology, both trees get the SAME edges perturbed, and the resulting topologies are identical.
-#
-# That makes this run a controlled branch-length contrast: accuracy_bl - accuracy_v2 at a matched
-# condition holds topology, tip states, perturbation and RNG all fixed. It is worth real care to
-# preserve, so two things are non-negotiable here:
-#
-#   1. THE BASELINE IS READ FROM ITS .nwk FILE, not regenerated in memory. write.tree/read.tree does
-#      not preserve the edge matrix -- it renumbers internal nodes -- but it renumbers IDENTICALLY
-#      for the unit-BL and true-BL trees, because the ordering follows topology and not branch
-#      lengths (verified: identical(U$edge, B$edge) is TRUE). Since perturb_collapse indexes edges,
-#      regenerating the tree in memory here would perturb DIFFERENT edges and silently destroy the
-#      matching while still producing a plausible-looking manifest.
-#   2. SEEDS COME FROM A VALUE -> SEED MAP, not from position. The published 02_make_trees.r derived
-#      base seeds from the INDEX of each intensity in its grid, so a 3-point grid would restart at
-#      21000 and collide with nni@1%. SEED_RANK below pins each intensity to the rank it had in the
-#      full published grid, so a subset keeps its original seeds.
-#
-# The manifest assertions at the bottom are what prove all of this actually held, rather than
-# assuming it: k and every per-replicate Robinson-Foulds distance must equal the published values
-# exactly. RF is topology-only, so if the perturbations are edge-matched the numbers must agree to
-# the integer.
+# Usage:
+#   Rscript 01_make_trees.r                 # optional env: SCOUT_ARMS, SCOUT_INTENSITIES, SCOUT_NREP
 
 # SCOUT_LIB may be a colon-separated path LIST, so a private build (e.g. the support_clip
 # SCOUT) can be prepended while its dependencies still resolve from the shared library.

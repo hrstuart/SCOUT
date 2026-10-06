@@ -1,3 +1,11 @@
+# lrt_utils.R -- likelihood-ratio-test model selection on SCOUT fit histories: AIC-best model with
+# a confirmatory LRT vs BM1 (run_lrt_pipeline), or hybrid AIC/AICc selection with a
+# Bonferroni-corrected multi-regime-vs-OU1 LRT (run_hybrid_pipeline).
+#
+# Usage:
+#   source('lrt_utils.R')
+#   sel <- run_hybrid_pipeline(full_history_df)      # one row per (dataset, gene_name)
+
 library(dplyr)
 library(tibble)
 

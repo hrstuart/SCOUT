@@ -1,43 +1,9 @@
-# Goal 1 on a BRANCH-LENGTH baseline (1_tree_perturb_bl) step 00:
-# build the baseline tree and simulate the counts/EVF matrices every perturbation arm is fitted
-# against, at each alpha in the grid.
+# 00_simulate_baseline.r -- Goal 1, branch-length baseline, step 00: build the baseline tree with
+# its true (ultrametric) branch lengths and simulate the counts/EVF matrices at every alpha.
+# Do not edit SCOUT_ALPHAS once data exists: the alphas share one RNG stream.
 #
-# WHAT IS DIFFERENT FROM 1_tree_perturb/00_simulate_baseline.r, AND WHY IT IS THE WHOLE POINT.
-#
-# That script stamps `simtree$edge.length <- rep(1, Nedge(simtree))` BEFORE simulating. This one
-# does not. That single line is the entire change; everything downstream follows from it.
-#
-# The consequence is not cosmetic. generate_tree_hbd_reverse returns an ULTRAMETRIC tree -- every
-# tip at depth 4.7388. Overwriting the edge lengths with 1 turns it into a NON-ultrametric tree of
-# height 18 with tip depths spanning 2-18, so BM tip variance varies ~9-fold across tips
-# (cv_var_bm = 0.285) while a stationary OU at alphaH = 54 is flat (cv_var_ou = 0). Tip-depth
-# heteroscedasticity therefore becomes BM's dominant marginal signature -- a per-tip variance
-# gradient that model selection can lean on and that NO amount of topological damage removes. That
-# is the most plausible explanation for why the published perturbation sweep came out flat: NNI and
-# collapse held 0.822 (counts) / 0.947 (EVF) from 1% intensity all the way to 75%.
-#
-# Keeping the true branch lengths sets cv_var_bm = 0 at every alpha (checked analytically, see the
-# identifiability reference this script writes). BM/OU separation then has to come from the
-# covariance structure -- which is exactly what NNI, collapse and shuffle damage. This run re-asks
-# the perturbation question in the regime where the topology should actually matter.
-#
-# Two smaller consequences, both handled below:
-#   t0    The tree is now height 4.7388, not 18, so BM tip sd is 2.177 instead of 4.243 and the
-#         5-sd margin gives t0 = 11 rather than 22. Derived from H the way
-#         2_branch_lengths/01_simulate_replicates.r derives it, never hard-coded.
-#   alpha alphaH is now 4.7388 * alpha instead of 18 * alpha, so the SAME alpha lands in a very
-#         different identifiability regime. alpha 3 here has cor_shape 0.269; the published run's
-#         alpha 3 had 0.190. That is why alpha is swept rather than fixed.
-#
-# THE ALPHA GRID IS LOCKED. simulate_test_data shares ONE RNG stream across the alpha vector, so
-# changing the length or the order of this grid changes the simulated data at every alpha after the
-# first -- including the EVFs. Adding an alpha later silently re-rolls the run. The grid is
-# therefore simulated in full ONCE and alphas are only ever DROPPED downstream (02_build_jobs.r
-# picks which ones are fitted). Do not edit SCOUT_ALPHAS after the data exists.
-#
-# Signal model is the affine framework the published v2 run used -- param_mode = 'affine',
-# scale_s = 2, support_clip = TRUE, 30 genes / 20 EVFs -- so the only moving part between this run
-# and that one is the branch lengths.
+# Usage:
+#   Rscript 00_simulate_baseline.r          # optional env: SCOUT_ROOT, SCOUT_ALPHAS, SCOUT_DATADIR
 
 # SCOUT_LIB may be a colon-separated path LIST, so a private build (e.g. the support_clip
 # SCOUT) can be prepended while its dependencies still resolve from the shared library.

@@ -2,18 +2,17 @@
 # =============================================================================
 # internal_node_EZ.R
 #
-# Posterior expectation E[Z] (and posterior sd) of the latent OU/BM trait at
-# EVERY node of a lineage tree -- tips AND internal nodes -- conditional on the
-# observed tip values X and the SCOUT parameters already estimated for each
-# gene's best-fitting model.
+# Posterior mean and sd of the latent SCOUT trait, E[Z | X], at every node of the
+# tree (tips and internal nodes), using each gene's best-fit SCOUT parameters.
+# Reuses SCOUT's internals; does not modify the package.
 #
-# Runs on ONE gene (--gene) or on every QC-passing gene in the best-fit table
-# (--all), in which case all genes are streamed into a single output file.
+# Node-wise conditional estimation is reimplemented here based on mvMORPH::estim()
+# (Clavel, Escarguel & Merceron 2015, Methods Ecol. Evol. 6:1311-1319).
 #
-# Standalone script: it does not modify or extend the SCOUT package. It reuses
-# SCOUT's own internals (preprocessTree / preprocessGene / compute_VCV /
-# compute_W_matrix / e_step) so the numbers come from the same machinery that
-# produced the fits.
+# Usage:
+#   Rscript internal_node_EZ.R --gene acdh.7 [--check-scaling] [--ref <results.rds>]
+#   Rscript internal_node_EZ.R --all --internal-only --out all_genes_EZ.csv.gz
+#   Rscript internal_node_EZ.R --help                 # all options
 #
 # ---------------------------------------------------------------------------
 # THE MATH
@@ -64,28 +63,6 @@
 # This tree is NOT ultrametric; the parameterisation handles that, being
 # written in terms of t_i and s_ij rather than a shared tree height.
 #
-# ---------------------------------------------------------------------------
-# WHERE THE PARAMETERS COME FROM
-# ---------------------------------------------------------------------------
-# alpha, sigma, tau        each gene's row in best_fit_filtered.csv
-# theta (one per regime)   <tid>_all_genes_<regime>_parameters.csv, which
-#                          best_fit_filtered.csv does not carry. Identical to
-#                          the values inside the results .rds; the csv is used
-#                          because that .rds expands to ~32 GB in RAM.
-# model/add.root/...       rebuilt with SCOUT's own preprocessTree()
-#
-# Pass --ref to cross-check theta, the tree summary and the stored e_Z against
-# the results object (accepts the full .rds or a single extracted element).
-#
-# ---------------------------------------------------------------------------
-# USAGE
-# ---------------------------------------------------------------------------
-#   Rscript internal_node_EZ.R --gene acdh.7
-#   Rscript internal_node_EZ.R --gene acdh.7 --check-scaling
-#   Rscript internal_node_EZ.R --gene acdh.7 --ref <results.rds>
-#
-#   # every QC-passing gene, one file, internal nodes only, gzipped:
-#   Rscript internal_node_EZ.R --all --internal-only --out all_genes_EZ.csv.gz
 # =============================================================================
 
 suppressWarnings(suppressMessages({

@@ -1,17 +1,9 @@
-# Preflight gate for the branch-length baseline run (1_tree_perturb_bl).
+# preflight_bl.r -- preflight gate for the branch-length baseline run: checks the R environment
+# and SCOUT install, and asserts every path the run will write is absent or empty so published
+# results cannot be overwritten. Exits non-zero on any failure.
 #
-# Two jobs, and the second one is the reason this file is separate from scripts/preflight_check.r:
-#
-#   1. The usual environment checks -- R version, packages, SCOUT exports, and the future::plan
-#      resolution check that caught the 2026-08 cluster outage (every package loaded, preflight
-#      passed, and all 550 tasks still died on the first fit because plan() and multisession() live
-#      in `future`, which future.apply Depends on but does not re-export).
-#
-#   2. AN OVERWRITE AUDIT. This run must not be able to disturb the published goal-1 / goal-2
-#      results. Every path it will write is enumerated from bl_paths() -- the same list the
-#      individual scripts guard against -- and asserted absent or empty BEFORE any compute is spent.
-#
-# Exits non-zero on any failure.
+# Usage:
+#   Rscript preflight_bl.r
 
 ROOT <- Sys.getenv('SCOUT_ROOT',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/1_tree_robustness')

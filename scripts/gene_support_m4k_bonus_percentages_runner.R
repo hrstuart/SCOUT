@@ -1,3 +1,10 @@
+# gene_support_m4k_bonus_percentages_runner.R -- gene-support run on the LUAD A549 M5K lineage
+# tree: builds nni/collapse perturbed trees at 5-20% intensity (no shuffle arm), refits SCOUT on
+# each, and writes per-gene support, support-by-condition and confidence CSVs.
+#
+# Usage:
+#   Rscript gene_support_m4k_bonus_percentages_runner.R    # paths, grid and cores set in m5k.obj / perturb.config
+
 source('/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/1_tree_robustness/scripts/scout_perturb_lib.R')
 source('/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/5_real_tree_robustness/scripts/gene_support.R')
 

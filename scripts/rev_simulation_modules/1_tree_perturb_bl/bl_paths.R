@@ -1,18 +1,9 @@
-# Path and completeness helpers for the branch-length baseline run (1_tree_perturb_bl).
+# bl_paths.R -- path and completeness helpers for the branch-length baseline run. Resolves
+# per-alpha output paths; reuses task_complete() from scout_task_paths.R. Base R only.
 #
-# WHY THIS FILE EXISTS AT ALL. The published pipeline resolves task paths through task_dir()/
-# task_stems() in scripts/scout_task_paths.R. Those two functions key off the goal name and have no
-# notion of alpha -- this run sweeps alpha, so two alphas of the same (arm, intensity, replicate)
-# would resolve to the SAME output path and silently overwrite each other. Rather than edit a file
-# the published goal-1 and goal-2 runs depend on, this run carries its own resolvers.
-#
-# task_complete() is NOT redefined here. It is sourced from scout_task_paths.R and reused verbatim,
-# so "done" means exactly what it means for every other run in this project -- every output CSV
-# present AND non-empty, derived from files on disk and nothing else. That is the predicate that
-# makes `resume` correct after a crash, and there must be only one of it.
-#
-# Deliberately BASE R ONLY, with no library() calls: 05_status.r refreshes on a 60s loop and cannot
-# afford library(SCOUT), which costs ~2m35s over DARTFS.
+# Usage:
+#   source(file.path(ROOT, 'scripts', '1_tree_perturb_bl', 'bl_paths.R'))
+#   P <- bl_paths()
 
 ROOT <- Sys.getenv('SCOUT_ROOT',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/1_tree_robustness')

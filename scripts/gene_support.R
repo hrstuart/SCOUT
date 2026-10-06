@@ -1,3 +1,12 @@
+# gene_support.R -- gene-level support for SCOUT model calls on real trees: fits SCOUT on a set of
+# perturbed trees (make_perturbed_trees, run_gene_support) and summarises how stable each gene's
+# call is across perturbations (gene_support, support_by_condition, gene_confidence).
+#
+# Usage:
+#   source('scout_perturb_lib.R'); source('gene_support.R')
+#   res  <- run_gene_support(obs_cfg, tree_set, layer = 'expression', cores = 48)
+#   SUPP <- gene_support(res)
+
 gene_set_tag <- function(genes) {
     if (requireNamespace('digest', quietly = TRUE)) return(substr(digest::digest(sort(genes)), 1, 8))
     h <- 5381

@@ -1,17 +1,9 @@
-# Goal 1 on a BRANCH-LENGTH baseline (1_tree_perturb_bl) step 03: fit ONE tree. Array task body.
+# 03_run_task.r -- Goal 1, branch-length baseline, step 03: fit SCOUT to one (alpha, layer, tree)
+# job. Array task body; writes three CSVs per task.
 #
 # Usage:
 #   Rscript 03_run_task.r 17        # task id given explicitly
 #   Rscript 03_run_task.r           # or from SLURM_ARRAY_TASK_ID
-#
-# For a given (alpha, layer) the data matrix is the SAME file for every task -- it was simulated
-# once from the baseline tree. The tree is the only thing that varies within an alpha, so any
-# difference in accuracy is attributable to the tree and nothing else. That is the design the
-# published run used and it is unchanged here; what changed is that the baseline tree now carries
-# its true branch lengths.
-#
-# Writes three CSVs per task and no .rds. Calling runSCOUT() directly rather than SCOUT() skips the
-# ~14 MB per-run .rds; across 640 tasks that would be ~9 GB nothing downstream reads.
 
 .libPaths(strsplit(Sys.getenv('SCOUT_LIB',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/software/R/R-4.4.2/library'), ':')[[1]])

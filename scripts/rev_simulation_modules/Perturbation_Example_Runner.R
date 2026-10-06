@@ -1,3 +1,10 @@
+# Perturbation_Example_Runner.R -- fits SCOUT to each regime-perturbation seed replicate listed in
+# replicates_manifest.csv, on both the EVF and counts layers, skipping fits already on disk.
+# Patches SCOUT's annotate_history in-session so delta_AIC is kept.
+#
+# Usage:
+#   Rscript Perturbation_Example_Runner.R    # ROOT, REPS, CORES and REGIMES set at the top
+
 .libPaths(c('/dartfs/rc/lab/M/McKennaLab/projects/hannah/software/R/R-4.4.2/library'))
 
 suppressPackageStartupMessages({

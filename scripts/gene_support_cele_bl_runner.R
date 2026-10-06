@@ -1,3 +1,10 @@
+# gene_support_cele_bl_runner.R -- gene-support run on the C. elegans rpl lineage tree (scaled to
+# unit height): builds nni/collapse/shuffle perturbed trees, refits SCOUT on each, and writes
+# per-gene support, support-by-condition and confidence CSVs.
+#
+# Usage:
+#   Rscript gene_support_cele_bl_runner.R    # paths, perturbation grid and cores set in cele.obj / perturb.config
+
 source('/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/1_tree_robustness/scripts/scout_perturb_lib.R')
 source('/dartfs/rc/lab/M/McKennaLab/projects/hannah/OU/revisions_analysis/revision_v2/5_real_tree_robustness/scripts/gene_support.R')
 

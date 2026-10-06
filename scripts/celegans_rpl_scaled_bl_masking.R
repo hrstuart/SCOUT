@@ -1,15 +1,13 @@
-# Held-out dropout validation of SCOUT on the C. elegans random-precise-lineage dataset.
+# celegans_rpl_scaled_bl_masking.R
+# Held-out dropout validation of SCOUT on the C. elegans random-precise-lineage tree (branch
+# lengths scaled to unit height). Masks clades and size-matched random cell sets, refits SCOUT-EM on
+# the retained cells, and scores predictions of the masked cells against their observed values.
 #
-# Masks part of the tree, refits SCOUT-EM on the retained cells, and predicts the masked cells'
-# expression from the retained cells alone -- in a `clade` arm (a whole monophyletic group) and a
-# matched `random` arm (the same number of scattered cells). Uses the fitting parameters
-# established in 260806_celegans_rpl_replicates_runner.r, except normalize: this matrix is already
-# log-normalised, so SCOUT()'s default of TRUE would log1p it a second time.
+# Masked-cell prediction (SCOUT::runSCOUT.dropout) is based on mvMORPH::estim()
+# (Clavel, Escarguel & Merceron 2015, Methods Ecol. Evol. 6:1311-1319).
 #
-# Scoring note: on real data there is no latent truth, so predictions are scored against the
-# OBSERVED values at the masked cells, which are Z + tip fog. RMSE therefore has an irreducible
-# floor near tau, and the result lives in the comparison between predictors (masked / prior /
-# oracle / global), not in the absolute number.
+# Usage:
+#   Rscript celegans_rpl_scaled_bl_masking.R    # inputs, gene/clade counts and cores set in the config block
 
 .libPaths(c('/dartfs/rc/lab/M/McKennaLab/projects/hannah/software/R/R-4.4.2/library', .libPaths()))
 
