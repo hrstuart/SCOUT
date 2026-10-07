@@ -1,32 +1,10 @@
-# Goal 1 on a BRANCH-LENGTH baseline (1_tree_perturb_bl) step 04: collate per-task CSVs.
+# 04_collate.r -- Goal 1, branch-length baseline, step 04: collate per-task CSVs into an accuracy
+# rollup, arm-vs-baseline deltas, and replicate-paired deltas against a reference run.
+# Safe to run while the sweep is in progress.
 #
-# Produces three things, in increasing order of what the run exists to answer:
-#
-#   1. ROLLUP -- mean/sd/se accuracy per (layer, alpha, arm, intensity), plus per-class recall and
-#      the pooled confusion. The descriptive layer, mirroring 1_tree_perturb/04_collate.r.
-#
-#   2. ARM-vs-BASELINE DELTA -- mean(arm) - baseline(SAME alpha, SAME layer). The primary
-#      within-run result: now that the branch lengths are real and tip-depth heteroscedasticity is
-#      gone, does degrading the topology actually cost anything? The baseline is a single
-#      unperturbed fit per (alpha, layer), so the uncertainty quoted is the arm's own SE across
-#      replicates -- the baseline contributes no replicate variance and it would be wrong to imply
-#      otherwise.
-#
-#   3. CROSS-RUN DELTA against a reference run -- this run minus the reference, paired by
-#      replicate, at every condition the two share. This is the contrast the whole design was built
-#      for: the perturbed topologies in the two runs are IDENTICAL (01_make_trees.r asserts it via
-#      RF), the tip states are identical, the seeds are identical, so the difference isolates one
-#      variable and nothing else. Only alphas present in both runs are compared.
-#
-#      SCOUT_V2_OUTROOT picks the reference and SCOUT_CROSS_TAG names it in the output. For the
-#      original run the reference is output/1_tree_perturb_v2 (tag 'v2') and the isolated variable
-#      is the BRANCH LENGTHS. For the ultrametric-restored run the reference is
-#      output/1_tree_perturb_bl (tag 'noum') and the isolated variable is TIP-DEPTH
-#      HETEROSCEDASTICITY -- same topologies, same data, same seeds, differing only in whether the
-#      perturbed tree was restored to a common tip depth before fitting.
-#
-# Safe to run while the sweep is still going -- it reports how many of the expected tasks are
-# present and summarises whatever has landed. output/1_tree_perturb_v2/ is read STRICTLY read-only.
+# Usage:
+#   Rscript 04_collate.r                                                     # reference = output/1_tree_perturb_v2
+#   SCOUT_V2_OUTROOT=<ref outroot> SCOUT_CROSS_TAG=noum Rscript 04_collate.r  # e.g. ultrametric run vs bl run
 
 .libPaths(strsplit(Sys.getenv('SCOUT_LIB',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/software/R/R-4.4.2/library'), ':')[[1]])

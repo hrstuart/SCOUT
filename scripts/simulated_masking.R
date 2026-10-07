@@ -1,59 +1,21 @@
 #!/usr/bin/env Rscript
 # ==============================================================================
-# SCOUT leave-one-out (dropout) validation on BETA-POISSON COUNTS
-# swept over tree size x alpha.
+# simulated_masking.R
 #
-# Plan:  2_dropout_output/plans/260817_counts_loo_sweep.md
-# Spec:  2_dropout_output/plans/260812_counts_scoring_support.md  (inventory 2.3,
-#        "planned only (not run)")
+# SCOUT dropout (held-out masking) validation on simulated beta-Poisson counts, swept over
+# tree size (128-1024 tips) x alpha (0.5-3), with both a known latent trait and real
+# observation noise.
 #
-# WHY THIS EXISTS
-#   The completed sim LOO run (SCOUT_dropout_20260811_v2) scores noiseless EVFs,
-#   which have tau = 0 by construction. The completed C. elegans LOO run scores
-#   observed counts but has no latent truth. Neither can answer "how much
-#   recovery survives the observation process", nor check tau-hat against a
-#   genuinely non-zero value. This run has BOTH: a known latent trait and real
-#   observation noise.
+# Masked-cell prediction (SCOUT::runSCOUT.dropout) is based on mvMORPH::estim()
+# (Clavel, Escarguel & Merceron 2015, Methods Ecol. Evol. 6:1311-1319).
 #
-# NO PACKAGE MODIFICATIONS
-#   The spec called for five changes to SCOUT. All five are implemented here,
-#   script-side, so nothing is installed into software/R/R-4.4.2/library (which
-#   is read live by running HPC jobs).
-#     1+2. identity gene effects  -> built here, SCOUT:::Get_params called directly
-#     3.   simulator forwarding   -> moot; sim_res is built up front
-#     4.   score_target='counts'  -> counts placed in the `evfs` slot (see BLOCK 5)
-#     5.   Spearman metrics       -> computed post-hoc from res$predictions
+# Usage:
+#   SCOUT_SMOKE=1 SCOUT_CELL=1 Rscript simulated_masking.R     # smoke test (~3-6 min)
+#   SCOUT_CELL=1 SCOUT_CORES=16 Rscript simulated_masking.R    # one grid cell (or SLURM_ARRAY_TASK_ID)
+#   Rscript simulated_masking.R                                 # all 16 cells serially (days)
 #
-# USAGE
-#   Smoke (~3-6 min, exercises every stage incl. both gates):
-#       SCOUT_SMOKE=1 SCOUT_CELL=1 Rscript 260817_counts_loo_sweep.R
-#
-#   One design cell (see the 16-cell grid below; ordered by size then alpha, so
-#   cells 1-4 are n=128 and cells 13-16 are n=1024):
-#       SCOUT_CELL=1 SCOUT_CORES=16 nohup Rscript 260817_counts_loo_sweep.R \
-#           > counts_loo_cell1_console.log 2>&1 &
-#
-#   RECOMMENDED: run several cells CONCURRENTLY, one process each. Every output
-#   name carries the cell's n and alpha, so concurrent processes cannot collide
-#   (same idiom as the bandwidth counts sweep, which runs one process per lambda2).
-#   With 96 cores, e.g. 5 processes x 16 cores:
-#       for c in 1 2 3 4 5; do
-#           SCOUT_CELL=$c SCOUT_CORES=16 nohup Rscript 260817_counts_loo_sweep.R \
-#               > counts_loo_cell${c}_console.log 2>&1 &
-#       done
-#
-#   All 16 cells serially in one process (simplest, but ~1,540 core-h total
-#   => several days at 16 cores -- prefer the concurrent form above):
-#       nohup Rscript 260817_counts_loo_sweep.R > counts_loo_console.log 2>&1 &
-#
-#   Follow progress:  tail -f <out_dir>/counts_loo_cell<N>_run.log
-#
-#   GRID (cell -> n_tips, alpha):
-#      1: 128/0.5   2: 128/1   3: 128/2   4: 128/3
-#      5: 256/0.5   6: 256/1   7: 256/2   8: 256/3
-#      9: 512/0.5  10: 512/1  11: 512/2  12: 512/3
-#     13:1024/0.5  14:1024/1  15:1024/2  16:1024/3
-#   Start with cell 1 (cheapest) and calibrate the rest from its wall time.
+#   Grid: cells 1-4 = 128 tips, 5-8 = 256, 9-12 = 512, 13-16 = 1024;
+#         alpha cycles 0.5 / 1 / 2 / 3 within each block.
 # ==============================================================================
 
 .libPaths(c(Sys.getenv('SCOUT_LIB',

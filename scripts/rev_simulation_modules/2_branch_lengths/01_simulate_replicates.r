@@ -1,32 +1,9 @@
-# Goal 2 (2_branch_lengths) step 01: simulate the replicate datasets.
+# 01_simulate_replicates.r -- Goal 2, step 01: simulate independent replicate datasets (fresh
+# tree, tip states and data each) on true-branch-length trees, for paired fitting on true vs unit
+# branch lengths. t0 is set per replicate from tree height.
 #
-# Unlike Goal 1, each replicate is an INDEPENDENT simulation -- fresh topology, fresh tip states,
-# fresh data -- and the data is simulated from the tree WITH its true branch lengths. The same data is
-# later fitted twice, on the true-branch-length tree and on its unit-branch-length counterpart
-# (tree_variant(phy, 'unit', 'keep')). Replicate is the unit of analysis and the design is paired.
-#
-# t0 is derived PER REPLICATE, not fixed. The EVF matrix is fitted directly in this goal, and it is
-# the latent OU process, so it can go negative -- theta cannot be fitted below 1e-10
-# (SCOUT_EM.R:213). A previous run used a global t0 = 10, derived from a single tree's height of
-# 4.74. But generate_tree_hbd_reverse gives heights spanning 4.6 to 13.5 across 50 draws: at H = 13.5
-# the BM tip sd is sqrt(13.5) = 3.67, so t0 = 10 is only 2.7 sd and BM EVFs went negative (min
-# -1.418), invalidating those replicates. t0 = ceiling(4.3 * sqrt(SIGMA) * sqrt(H)) gives a 4.3-sd
-# margin over each replicate's OWN height, which covers 20 x 256 = 5,120 BM draws. The design is
-# paired within replicate -- both arms fit the same data -- so a per-replicate t0 costs nothing.
-#
-# Counts are simulated through the ORIGINAL rank signal model (param_mode = 'rank', burst_scale = 1,
-# scale_s = 10). The rank transform is scale-invariant: it keeps the ORDERING of the OU trait and
-# discards its magnitude, collapsing each gene's cell-to-cell range to a ~1.31x regime fold change
-# against beta-Poisson log-noise of sd 0.57. On a 256-tip branch-length tree that classifies counts at
-# 0.680 [0.599, 0.754] while the latent EVFs classify at 0.883 -- so the counts arm here is expected to
-# sit near 0.68, not near the EVF ceiling. See output/3_signal_model/ for the measured 2x2.
-#
-# ONLY the counts arm is affected. The EVF arm is upstream of Get_params and is byte-identical under
-# every signal model, so the paired design and the EVF results are unchanged.
-#
-# t0 does not confound the counts arm under rank, and for a stronger reason than under affine: every
-# kinetic parameter goes through the scale-invariant rank transform, so the EVF mean level is
-# discarded outright. Raising t0 buys EVF positivity at literally no cost to counts.
+# Usage:
+#   Rscript 01_simulate_replicates.r        # optional env: SCOUT_ALPHA_G2 (default 3), SCOUT_NREP, SCOUT_DATADIR
 
 # SCOUT_LIB may be a colon-separated path LIST, so a private build (e.g. the support_clip
 # SCOUT) can be prepended while its dependencies still resolve from the shared library.

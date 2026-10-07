@@ -1,9 +1,8 @@
-# Goal 2 (2_branch_lengths) step 03: collate per-task CSVs into the summary files.
+# 03_collate.r -- Goal 2, step 03: collate per-task CSVs into summary files: per-arm accuracy and
+# the paired true-vs-unit difference with a paired t-test.
 #
-# The design is paired -- the same simulated matrix is fitted on the true-branch-length tree and on
-# the unit-branch-length tree -- so the estimate of interest is the WITHIN-REPLICATE difference, not
-# the difference of the two group means. A paired t-test and the mean paired difference are reported
-# alongside the per-arm accuracies.
+# Usage:
+#   Rscript 03_collate.r                    # optional env: SCOUT_OUTROOT, SCOUT_JOBS
 
 # SCOUT_LIB may be a colon-separated path LIST, so a private build (e.g. the support_clip
 # SCOUT) can be prepended while its dependencies still resolve from the shared library.

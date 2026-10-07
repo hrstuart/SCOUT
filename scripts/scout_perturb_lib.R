@@ -1,17 +1,10 @@
-# scout_perturb_lib.R -- tree perturbation and classification scoring for the tree-robustness revision
+# scout_perturb_lib.R -- tree perturbation (shuffle / nni / collapse) and classification scoring
+# for the tree-robustness analyses. Uses only SCOUT's API; does not modify the package.
 #
-# Self-contained: sourced by the runner scripts, uses only SCOUT's exported API plus one internal
-# (extract_history_grid_search). Nothing here modifies the installed SCOUT package, so this bundle
-# can be copied to another cluster and run against an unmodified SCOUT install.
-#
-# The question these support: is SCOUT's model classification an artefact of being handed the exact
-# generating topology? Each arm degrades a tree in one controlled way, the data matrix is held fixed,
-# and the only thing that varies between fits is the tree.
-#
-# Every perturbation returns a tree that is already fully resolved with no zero-length edges. That
-# matters: formatSCOUT (SCOUT_EM_utils.R:1042-1055) silently calls multi2di() on any polytomy and
-# rewrites zero-length edges to 1e-7, both using an uncontrolled RNG. Without resolving here, the
-# newick written to disk would not be the tree that was actually fitted.
+# Usage:
+#   source('scout_perturb_lib.R')
+#   pt  <- perturb_tree(phy, type = 'nni', intensity = 0.1, randseed = 1)
+#   res <- score_classification(pt, dat, dataset_id = 'x', regimes = ...)
 
 suppressPackageStartupMessages({
     library(SCOUT); library(ape); library(dplyr); library(stringr)

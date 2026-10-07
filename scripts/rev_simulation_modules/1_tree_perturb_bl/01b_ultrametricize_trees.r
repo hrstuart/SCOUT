@@ -1,81 +1,10 @@
-# Goal 1, ULTRAMETRIC-RESTORED perturbation set (1_tree_perturb_bl_um) step 01b:
-# take the 105 perturbed trees the bl run already built and restore every tip to a common depth,
-# writing the result under new names. Nothing here re-perturbs and nothing here re-simulates.
+# 01b_ultrametricize_trees.r -- Goal 1, ultrametric-restored set, step 01b: refit the branch
+# lengths of every perturbed tree from 01_make_trees.r so all tips share the baseline depth,
+# topology unchanged. Removes the tip-depth variance signal that biases fits against BM.
 #
-# ---------------------------------------------------------------------------------------------
-# WHY THIS STEP EXISTS.
-#
-# In 1_tree_perturb_bl the data are simulated ONCE on the ultrametric baseline tree (H = 4.738808,
-# every tip at the same depth) and then fitted against each PERTURBED tree. 03_run_task.r reads
-# job$data_file and job$tree_file and never re-simulates, so the simulating tree and the fitting
-# tree are not the same object the moment a perturbation is applied.
-#
-# That matters because NNI and collapse both destroy ultrametricity:
-#
-#     arm        int          H      dmin      dmed  cv_var_bm  ultrametric
-#     BASELINE   -        4.739     4.739     4.739     0.0000      yes
-#     shuffle    1        4.739     4.739     4.739     0.0000      yes
-#     nni        0.1      6.859     3.215     4.966     0.1164       no
-#     nni        0.5     11.365     1.995     7.086     0.2704       no
-#     nni        0.9     15.726     1.601     9.269     0.3093       no
-#     collapse   0.1      4.739     2.661     4.536     0.1109       no
-#     collapse   0.5      4.398     0.712     2.694     0.3433       no
-#     collapse   0.9      3.133     0.023     0.692     0.7606       no
-#
-# Under BM the marginal tip variance is sigma^2 * d_i, strictly proportional to root-to-tip depth.
-# Under OU it saturates at sigma^2/(2*alpha) as soon as alpha*d_i is appreciable, i.e. it is flat
-# for ANY tree. So a fitted BM model on a tree with dispersed tip depths predicts a variance
-# gradient across tips, while OU predicts flatness -- and the DATA, simulated on the ultrametric
-# baseline, has flat tip variance whichever model generated it. BM therefore eats a misfit that OU
-# is immune to, and it has no free parameter to absorb it: sigma^2 is a single global scale.
-#
-# The measured consequence in the bl run is that BM selection falls monotonically with cv_var_bm
-# (r = -0.84 to -0.99 across five of six layer x alpha cells). Because the low-alpha baseline
-# OVER-calls BM (pBM1 = 0.567 at counts alpha 0.5, 0.733 at evf alpha 0.5, against a truth of
-# 0.333), suppressing BM accidentally de-biases the classifier and ACCURACY GOES UP -- collapse@50%
-# scores 0.627 against a 0.533 baseline. That is not robustness, it is a confound, and it is the
-# reason the arm-vs-baseline deltas change sign across alpha.
-#
-# Restoring ultrametricity closes that channel. cv_var_bm returns to ~0 for every arm, the fitted
-# BM model once again predicts the flat tip variance the data actually has, and what remains
-# between an arm and the baseline is the thing the experiment was always meant to measure: the
-# damage to the TOPOLOGY and to the internal branch-length structure.
-#
-# ---------------------------------------------------------------------------------------------
-# WHAT IS AND IS NOT PRESERVED.
-#
-# PRESERVED EXACTLY. The topology. Every tree here is derived from the corresponding tree in
-# data/1_tree_perturb_bl/perturbed_trees/ by changing branch lengths only, and the script asserts
-# RF.dist(um, original) == 0 for all 105. The arm/intensity/replicate keys, the seeds and the
-# rf_dist against the baseline are carried through unchanged, so 04_collate.r's cross-run join
-# pairs a replicate against ITS OWN non-ultrametric twin.
-#
-# NOT PRESERVED. "NNI keeps every branch length" is no longer literally true after this step: you
-# cannot hold both the branch lengths and the tip depths fixed while moving subtrees around. The
-# NNLS fit finds the ultrametric tree closest to the perturbed tree in patristic distance, so the
-# perturbation's effect on the covariance structure is kept as far as an ultrametric tree can keep
-# it, but internal edges do move. `patristic_cor` in the manifest records how much survived, per
-# tree, so this is measured rather than assumed.
-#
-# METHOD. Default nnls (phytools::force.ultrametric -> phangorn::nnls.tree with rooted = TRUE):
-# non-negative least squares on the tree's OWN cophenetic distances under an ultrametric
-# constraint. It spreads the correction over the whole tree instead of dumping it on the terminal
-# edges, which is what `extend` does -- on collapse@90%, where tips sit at depth 0.023, `extend`
-# would hand almost every tip a ~4.7-long terminal branch and make the tips nearly independent,
-# destroying far more of the perturbation than the ultrametric constraint requires. `extend` and
-# `chronos` remain selectable via SCOUT_UM_METHOD for a sensitivity check, and whichever ran is
-# recorded per tree in the manifest.
-#
-# SHUFFLE IS A DELIBERATE NO-OP. perturb_shuffle permutes tip LABELS and never touches the
-# geometry, so those trees are already ultrametric and pass through unchanged (method 'noop').
-# They are still rebuilt and refitted, because a shuffle arm that does not reproduce the existing
-# bl run's shuffle numbers is a positive control failing -- it would mean something other than
-# ultrametricity moved between the two runs.
-#
-# AFTERWARDS every tree in the set has the SAME height (4.738808) and the same flat tip-depth
-# profile as the baseline. Since alpha is a free parameter, a uniform rescaling of a tree is
-# absorbed by alpha and is not identifiable, so fixing the height costs no generality and removes
-# one axis of nuisance variation between arms.
+# Usage:
+#   Rscript 01b_ultrametricize_trees.r      # optional env: SCOUT_UM_METHOD = nnls (default) | extend | chronos
+#                                           #               SCOUT_BL_TAG (default '_um')
 
 .libPaths(strsplit(Sys.getenv('SCOUT_LIB',
     '/dartfs/rc/lab/M/McKennaLab/projects/hannah/software/R/R-4.4.2/library'), ':')[[1]])

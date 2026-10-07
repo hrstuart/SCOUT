@@ -1,16 +1,9 @@
-# Goal 2 (2_branch_lengths) step 02: fit ONE replicate's matrix on BOTH trees. This is the array
-# task body.
+# 02_run_task.r -- Goal 2, step 02: fit one replicate's matrix on both the true- and the
+# unit-branch-length tree. Array task body.
 #
 # Usage:
 #   Rscript 02_run_task.r            # task id from SLURM_ARRAY_TASK_ID
 #   Rscript 02_run_task.r 7          # task id given explicitly (for smoke tests)
-#
-# One task = one (replicate, matrix_type) pair, fitted on the true-branch-length tree and on the
-# unit-branch-length tree. Pairing them in a single task guarantees both arms see byte-identical data
-# and keeps each task under the wall-clock limit; splitting them would double the I/O for no gain.
-#
-# EVFs are the latent OU process and contain negative values, so they must NOT be log-normalised --
-# log1p would give NaN. Counts reach ~1e5, far above the theta upper bound, so they must be.
 
 # SCOUT_LIB may be a colon-separated path LIST, so a private build (e.g. the support_clip
 # SCOUT) can be prepended while its dependencies still resolve from the shared library.
