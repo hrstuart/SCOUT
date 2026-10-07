@@ -6,7 +6,7 @@
 # tree (tips and internal nodes), using each gene's best-fit SCOUT parameters.
 # Reuses SCOUT's internals; does not modify the package.
 #
-# Node-wise conditional estimation is reimplemented here based on mvMORPH::estim()
+# Node-wise conditional estimation is based on mvMORPH::estim()
 # (Clavel, Escarguel & Merceron 2015, Methods Ecol. Evol. 6:1311-1319).
 #
 # Usage:

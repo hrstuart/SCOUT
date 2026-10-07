@@ -6,6 +6,21 @@
 #' @param species_key if the species column is not called 'species' (rather cellBC for example), indicate the correct name here. 
 #' @param blacklist genes for testing are inferred automatically. if any columns in the counts file are not for testing and not either the species key or model name, list them here.
 #' @param method one of EM (expectation-maximization), SM (smoothing), MTF (tip fog).
+#' @param genes optional character vector of genes to fit (e.g. from \code{select_lambda_genes()}).
+#'   Default NULL fits every gene column, as before.
+#' @param lambda_filter if TRUE, run \code{lambda_screen()} on the same inputs before fitting and
+#'   fit only genes passing \code{lambda_min} / \code{lambda_p_max}; the screen is written to
+#'   \code{<testid>_lambda_screen.csv}. Default FALSE bypasses the screen (all genes are fit).
+#' @param lambda_min,lambda_p_max cutoffs for the lambda filter (lambda >= lambda_min,
+#'   LRT P <= lambda_p_max). At least one is required when \code{lambda_filter = TRUE}.
+#' @param lambda_engine engine for \code{lambda_screen()}: 'auto' uses the fast engine on
+#'   ultrametric trees and reports + falls back to the slow phytools engine otherwise.
+#' @param selection_ic \code{'AICc'} or \code{'AIC'} for \code{scout_model_selection()}, whose
+#'   per-gene table (selected model, weights, parameters, convergence flags, final_set) is written
+#'   to \code{<testid>_model_selection.csv}. The AIC-based best-fit outputs are unchanged.
+#' @param hybrid if TRUE and both BM1 and OU1 are among \code{regimes}, the selection uses the
+#'   hybrid IC + LRT procedure (\code{select_model_hybrid()}); otherwise IC alone.
+#' @param hybrid_alpha significance level for the hybrid LRT.
 #' @import paleotree
 #' @import corpcor
 #' @import nloptr
@@ -31,7 +46,15 @@ SCOUT <- function(counts.file, tree.file, results_dir,
 	lambda2 = 0.2, 
 	cores = 1, 
 	logfile = NULL, 
-	verbose = TRUE
+	verbose = TRUE,
+	genes = NULL,
+	lambda_filter = FALSE,
+	lambda_min = NULL,
+	lambda_p_max = NULL,
+	lambda_engine = 'auto',
+	selection_ic = 'AICc',
+	hybrid = TRUE,
+	hybrid_alpha = 0.05
 	){
 
   create_directory_if_not_exists(results_dir)
@@ -72,8 +95,27 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     	skipE <- TRUE; skipT <- TRUE
     }
 
+    # Optional Pagel's lambda screen: drop genes with no phylogenetic signal before fitting.
+    lambda_res <- NULL
+    if (lambda_filter) {
+      if (is.null(lambda_min) && is.null(lambda_p_max)) {
+        stop('lambda_filter = TRUE needs lambda_min and/or lambda_p_max (see plot_lambda_screen()).')
+      }
+      lambda_res <- lambda_screen(counts, tree, species_key = species_key, regimes = regimes,
+        blacklist = blacklist, genes = genes, normalize = normalize, engine = lambda_engine,
+        cores = cores, lambda_min = lambda_min, p_max = lambda_p_max, logfile = logfile,
+        verbose = verbose)
+      write.csv(as.data.frame(lambda_res), sprintf('%s/%s_lambda_screen.csv', results_dir, tid),
+        row.names = FALSE)
+      genes <- lambda_res$gene_name[lambda_res$pass]
+      log_message(sprintf('Lambda filter: keeping %d of %d genes (lambda_min = %s, lambda_p_max = %s).',
+        length(genes), nrow(lambda_res), format(lambda_min), format(lambda_p_max)), logfile, verbose = TRUE)
+      if (!length(genes)) stop('No genes pass the lambda filter; nothing to fit.')
+    }
+
     idata <- formatSCOUT(tree_path = tree, 
       metadata_path = counts, 
+      quant_traits = genes, 
       species_key = species_key, 
       anc_infer = infer_anc, 
       outpath = results_dir, 
@@ -130,7 +172,26 @@ SCOUT <- function(counts.file, tree.file, results_dir,
     write.table(tmp, sprintf('%s/%s_all_genes_%s_parameters.csv', results_dir, tid, r))
   }
 
-	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas, SCOUT_input = idata))
+  # Per-gene selection table: IC (or hybrid IC + LRT) call, weights, parameters, QC flags.
+  use_hybrid <- hybrid && all(c('BM1', 'OU1') %in% regimes)
+  if (hybrid && !use_hybrid) {
+    log_message('Hybrid selection needs both BM1 and OU1 in regimes; selecting by IC alone.', logfile, verbose = verbose)
+  }
+  selection <- tryCatch(
+    scout_model_selection(annotated, params = thetas, ic = selection_ic, hybrid = use_hybrid,
+      hybrid_alpha = hybrid_alpha, check_convergence = method == 'EM'),
+    error = function(e) {
+      log_message(sprintf('Model selection table failed and was skipped: %s', conditionMessage(e)), logfile, verbose = TRUE)
+      NULL
+    })
+  if (!is.null(selection)) {
+    write.csv(selection, sprintf('%s/%s_model_selection.csv', results_dir, tid), row.names = FALSE)
+    log_message(sprintf('Model selection (%s%s): %d of %d genes in final_set.', selection_ic,
+      if (use_hybrid) ' + hybrid LRT' else '', sum(selection$final_set), nrow(selection)), logfile, verbose = TRUE)
+  }
+
+	return(list(SCOUT_class = annotate_history_select, SCOUT_params = thetas, SCOUT_input = idata,
+	  SCOUT_selection = selection, SCOUT_lambda = lambda_res))
 
 }
 

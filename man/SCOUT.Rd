@@ -16,6 +16,7 @@ SCOUT(
   normalize = TRUE,
   scale_tree = FALSE,
   smoothing_k = NULL,
+  infer_anc = "ape",
   tau_prior_sd = 0.1,
   tau_prior_mean = 0.2,
   fixed_root = FALSE,
@@ -23,7 +24,15 @@ SCOUT(
   lambda2 = 0.2,
   cores = 1,
   logfile = NULL,
-  verbose = TRUE
+  verbose = TRUE,
+  genes = NULL,
+  lambda_filter = FALSE,
+  lambda_min = NULL,
+  lambda_p_max = NULL,
+  lambda_engine = "auto",
+  selection_ic = "AICc",
+  hybrid = TRUE,
+  hybrid_alpha = 0.05
 )
 }
 \arguments{
@@ -40,6 +49,28 @@ SCOUT(
 \item{blacklist}{genes for testing are inferred automatically. if any columns in the counts file are not for testing and not either the species key or model name, list them here.}
 
 \item{method}{one of EM (expectation-maximization), SM (smoothing), MTF (tip fog).}
+
+\item{genes}{optional character vector of genes to fit (e.g. from \code{select_lambda_genes()}).
+Default NULL fits every gene column, as before.}
+
+\item{lambda_filter}{if TRUE, run \code{lambda_screen()} on the same inputs before fitting and
+fit only genes passing \code{lambda_min} / \code{lambda_p_max}; the screen is written to
+\code{<testid>_lambda_screen.csv}. Default FALSE bypasses the screen (all genes are fit).}
+
+\item{lambda_min, lambda_p_max}{cutoffs for the lambda filter (lambda >= lambda_min,
+LRT P <= lambda_p_max). At least one is required when \code{lambda_filter = TRUE}.}
+
+\item{lambda_engine}{engine for \code{lambda_screen()}: 'auto' uses the fast engine on
+ultrametric trees and reports + falls back to the slow phytools engine otherwise.}
+
+\item{selection_ic}{\code{'AICc'} or \code{'AIC'} for \code{scout_model_selection()}, whose
+per-gene table (selected model, weights, parameters, convergence flags, final_set) is written
+to \code{<testid>_model_selection.csv}. The AIC-based best-fit outputs are unchanged.}
+
+\item{hybrid}{if TRUE and both BM1 and OU1 are among \code{regimes}, the selection uses the
+hybrid IC + LRT procedure (\code{select_model_hybrid()}); otherwise IC alone.}
+
+\item{hybrid_alpha}{significance level for the hybrid LRT.}
 }
 \description{
 Wrapper function to run SCOUT
