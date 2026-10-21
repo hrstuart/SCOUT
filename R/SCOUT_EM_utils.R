@@ -2,8 +2,12 @@
 
 ####### SUPPORT FUNCTIONS #######
 
-transformPhy.new <- function(phy, map, Alpha_j, Sigma_j, tip.paths = NULL) {
+transformPhy.new <- function(phy, map, Alpha_j, Sigma_j, tip.paths = NULL, add.root = TRUE) {
     # This is the new transformPhy from OUwie but reduced so that it only needs a single alpha and sigma command. 
+    # add.root follows compute_VCV: TRUE conditions on the root, FALSE is stationary.
+    if (!add.root && (!is.finite(Alpha_j) || Alpha_j <= 0)) {
+        stop('Stationary root covariance requires positive finite alpha.')
+    }
     nTip <- length(phy$tip.label)
 
     #ensure we traverse edges from root toward tips so Ato[ancestor] is ready
@@ -42,6 +46,10 @@ transformPhy.new <- function(phy, map, Alpha_j, Sigma_j, tip.paths = NULL) {
         Ato[des] <- Acur
     }
     phy$edge.length <- V_Tilde
+    # Tip scaling turns this shared variance into
+    # Sigma_j/(2*Alpha_j) * exp(-Alpha_j * (t_i + t_j)).
+    # Overwrite any input root edge: root variance is determined by the model.
+    phy$root.edge <- if (add.root) 0 else Sigma_j / (2 * Alpha_j)
     #calculates the diagonal matrix for each tip i
     DiagWt <- numeric(nTip)
     names(DiagWt) <- phy$tip.label
