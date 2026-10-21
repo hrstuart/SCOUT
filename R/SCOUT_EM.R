@@ -160,7 +160,8 @@ m_step_tipfog <- function(Z, X, params_init, phy, edges, defaults, lambda1, lamb
             transformed.tree <- HoAne_transform_tree(phy, defaults$model, defaults$add.root, alpha, sigma)
         } else {
             transform <- defaults[['tp_const']]
-            transformed.tree <- transformPhy.new(phy, transform$map, alpha, sigma, transform$tippath)
+            transformed.tree <- transformPhy.new(phy, transform$map, alpha, sigma, transform$tippath,
+                                                 add.root = defaults$add.root)
         }
 
         if (!defaults$skipTau){
@@ -342,7 +343,8 @@ m_step_tipfog <- function(Z, X, params_init, phy, edges, defaults, lambda1, lamb
             transformed.tree <- HoAne_transform_tree(phy, defaults$model, defaults$add.root, alpha_new, sigma_new)
         } else {
             transform <- defaults[['tp_const']]
-            transformed.tree <- transformPhy.new(phy, transform$map, alpha_new, sigma_new, transform$tippath)
+            transformed.tree <- transformPhy.new(phy, transform$map, alpha_new, sigma_new, transform$tippath,
+                                                 add.root = defaults$add.root)
         }
 
         TIPS <- transformed.tree$tree$edge[,2] <= length(transformed.tree$tree$tip.label)
