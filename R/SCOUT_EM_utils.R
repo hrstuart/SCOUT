@@ -311,9 +311,14 @@ compute_W_matrix <- function(tree_info, alpha, normalize=FALSE, add.root=TRUE) {
   n_leaves <- tree_info$n_leaves
   regimes <- tree_info$unique_regimes
   n_regimes <- length(regimes)
-  root.state <- tree_info$root.state 
+  # Factors index matrices by integer code; the root must select a regime label.
+  root.state <- as.character(tree_info$root.state)
   W <- matrix(0, nrow = n_leaves, ncol = n_regimes)
   colnames(W) <- regimes
+  if (length(root.state) != 1L || is.na(root.state) ||
+      sum(colnames(W) == root.state, na.rm = TRUE) != 1L) {
+    stop('Root regime must match exactly one weights-matrix column.')
+  }
   
   for (i in 1:n_leaves) {
     segments <- tree_info$regime_paths[[i]]
